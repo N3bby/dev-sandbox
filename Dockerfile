@@ -12,6 +12,7 @@ RUN apt-get install -y zsh
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 RUN chsh -s /usr/bin/zsh
 ENV SHELL=/usr/bin/zsh
+ENV ZDOTDIR=/root
 
 # Customise Zsh prompt
 RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /root/.zshrc \
