@@ -21,8 +21,8 @@ getent passwd "$HOST_UID" > /dev/null 2>&1 || \
 
 USERNAME=$(getent passwd "$HOST_UID" | cut -d: -f1)
 
-# Transfer ownership of the home dir so the user can create new files there
-chown "$HOST_UID:$HOST_GID" /root
+# Transfer ownership of the home dir and all its contents to the new user
+chown -R "$HOST_UID:$HOST_GID" /root
 
 # Grant passwordless sudo
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
