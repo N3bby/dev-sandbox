@@ -8,6 +8,21 @@ IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
 MOUNTS_FILE="${HOME}/.config/dev-sandbox/mounts"
 
+# --- Self-update ---
+SELF="$(readlink -f "$0")"
+TMPSCRIPT="$(mktemp)"
+trap 'rm -f "$TMPSCRIPT"' EXIT
+if git archive --remote="$REPO" HEAD dev 2>/dev/null | tar -xO > "$TMPSCRIPT" 2>/dev/null \
+    && [ -s "$TMPSCRIPT" ] \
+    && ! cmp -s "$TMPSCRIPT" "$SELF"; then
+  echo "Updating dev..."
+  cp "$TMPSCRIPT" "$SELF"
+  chmod +x "$SELF"
+  rm -f "$TMPSCRIPT"
+  trap - EXIT
+  exec "$SELF" "$@"
+fi
+
 # --- Build image ---
 echo "Building Docker image from ${REPO}..."
 git archive --remote="$REPO" HEAD Dockerfile | tar -xO | docker build -t "$IMAGE_NAME" -f - .
