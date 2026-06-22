@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-BOLD=$'\033[1m'
 GREEN=$'\033[0;32m'
 CYAN=$'\033[0;36m'
 YELLOW=$'\033[0;33m'
@@ -21,28 +20,19 @@ IMAGE_NAME="capytalli-image"
 WORKDIR="/home/ubuntu/project/$(basename "$(pwd)")"
 MOUNTS_FILE="$REPO_DIR/mounts"
 
-echo ""
-echo "${BOLD}🐳 dev-sandbox${RESET}"
-echo ""
-
 # --- Self-update ---
-echo "  🔄 Checking for updates..."
+echo "Checking for updates..."
 _old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)
 git -C "$REPO_DIR" pull --quiet
 if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$_old_rev" ]; then
-  echo "     ${GREEN}✅ Updated — restarting...${RESET}"
-  echo ""
+  echo "${GREEN}Updated — restarting...${RESET}"
   exec "$0" "$@"
 fi
-echo "     ${GREEN}✅ Up to date${RESET}"
-echo ""
 unset _old_rev
 
 # --- Build image ---
-echo "  🔨 Building Docker image..."
+echo "Building Docker image..."
 docker build -t "$IMAGE_NAME" "$REPO_DIR"
-echo "     ${GREEN}✅ Image ready${RESET}"
-echo ""
 
 # --- Resolve optional mounts from config ---
 MOUNTS=()
@@ -56,16 +46,15 @@ if [ -f "$MOUNTS_FILE" ]; then
     if [ -e "$src" ]; then
       MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind${extra}")
     else
-      echo "     ${YELLOW}⚠️  Skipping mount ${CYAN}${src}${YELLOW} (not found)${RESET}" >&2
+      echo "${YELLOW}Warning: skipping mount ${src} (not found)${RESET}" >&2
     fi
   done < "$MOUNTS_FILE"
 else
-  echo "  ${YELLOW}⚠️  No mounts config found at ${CYAN}${MOUNTS_FILE}${YELLOW} — running without optional mounts${RESET}" >&2
+  echo "${YELLOW}Warning: no mounts config found at ${MOUNTS_FILE} — running without optional mounts${RESET}" >&2
 fi
 
 # --- Run container ---
-echo "  🚀 Starting container ${CYAN}${CONTAINER_NAME}${RESET}..."
-echo ""
+echo "Starting ${CYAN}${CONTAINER_NAME}${RESET}..."
 clear
 docker run -it --rm \
   --name "$CONTAINER_NAME" \
