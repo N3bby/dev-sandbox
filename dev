@@ -25,7 +25,7 @@ fi
 
 # --- Build image ---
 echo "Building Docker image from ${REPO}..."
-git archive --remote="$REPO" HEAD Dockerfile | tar -xO | docker build -t "$IMAGE_NAME" -f - .
+git archive --remote="$REPO" HEAD Dockerfile entrypoint.sh | docker build -t "$IMAGE_NAME" -f Dockerfile -
 
 # --- Resolve optional mounts from config ---
 MOUNTS=()

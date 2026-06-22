@@ -21,5 +21,6 @@ chown "$HOST_UID:$HOST_GID" /root
 
 # Grant passwordless sudo
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
+chmod 440 /etc/sudoers.d/devuser
 
 exec gosu "$USERNAME" "$@"
