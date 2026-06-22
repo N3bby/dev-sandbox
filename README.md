@@ -35,11 +35,11 @@ source:target[:ro]
 ```
 # comments and blank lines are ignored
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
-~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
-~/.gitconfig:/root/.gitconfig:ro
-~/.claude:/root/.claude
-~/.claude.json:/root/.claude.json
+~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
+~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
+~/.gitconfig:/home/ubuntu/.gitconfig:ro
+~/.claude:/home/ubuntu/.claude
+~/.claude.json:/home/ubuntu/.claude.json
 ```
 
 Append `:ro` to mount a path read-only. Missing paths are skipped with a warning. Edit this file to add or remove mounts per machine. It is gitignored so it stays local to each machine.
