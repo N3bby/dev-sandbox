@@ -7,22 +7,21 @@ RUN apt-get install -y locales && locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-# Symlink /home/ubuntu -> /root so any tool that uses $HOME=/home/ubuntu
-# (ubuntu:24.04 base image default) resolves to /root transparently.
-# rm -rf first because ln -sf won't replace an existing directory.
-RUN rm -rf /home/ubuntu && ln -s /root /home/ubuntu
+# Use /home/ubuntu as the actual home directory for all tool installations
+RUN mkdir -p /home/ubuntu
+ENV HOME=/home/ubuntu
 
 # Install Zsh and Oh My Zsh
 RUN apt-get install -y zsh
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 RUN chsh -s /usr/bin/zsh
 ENV SHELL=/usr/bin/zsh
-ENV ZDOTDIR=/root
+ENV ZDOTDIR=/home/ubuntu
 
 # Customise Zsh prompt
-RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /root/.zshrc \
-    && echo "CAP_RIGHT=\$'\\ue0b4'" >> /root/.zshrc \
-    && echo 'PROMPT="%F{black}${CAP_LEFT}%K{black}%fdev%k%F{black}${CAP_RIGHT}%f%k $PROMPT"' >> /root/.zshrc
+RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /home/ubuntu/.zshrc \
+    && echo "CAP_RIGHT=\$'\\ue0b4'" >> /home/ubuntu/.zshrc \
+    && echo 'PROMPT="%F{black}${CAP_LEFT}%K{black}%fdev%k%F{black}${CAP_RIGHT}%f%k $PROMPT"' >> /home/ubuntu/.zshrc
 
 # Install Docker CLI
 RUN install -m 0755 -d /etc/apt/keyrings \
@@ -34,12 +33,12 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 
 # Install Claude Code
 RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH="/root/.local/bin:$PATH"
+ENV PATH="/home/ubuntu/.local/bin:$PATH"
 
 # Install asdf
 RUN git clone https://github.com/asdf-vm/asdf.git /opt/asdf --branch v0.16.7
 ENV PATH="/opt/asdf/bin:/opt/asdf/shims:$PATH"
-RUN echo '. /opt/asdf/asdf.sh' >> /root/.zshrc
+RUN echo '. /opt/asdf/asdf.sh' >> /home/ubuntu/.zshrc
 
 # Install Java
 # RUN asdf plugin add java
