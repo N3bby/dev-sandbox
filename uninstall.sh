@@ -12,7 +12,10 @@ read -r -p "Remove ${INSTALL_DIR}? [y/N] " confirm
 if [[ "$confirm" =~ ^[Yy]$ ]]; then
   rm -rf "$INSTALL_DIR"
   echo "Removed: ${INSTALL_DIR}"
-  echo "Also remove the PATH entry from your .bashrc or .zshrc."
+  echo ""
+  echo "Remember to remove the following line from your .bashrc or .zshrc:"
+  echo ""
+  echo "  export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\""
 else
   echo "Aborted."
 fi
