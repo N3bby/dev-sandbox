@@ -8,6 +8,12 @@ Starts a Docker container with the current directory mounted, using a shared ima
 git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar -xO | bash
 ```
 
+## Uninstall
+
+```bash
+git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD uninstall.sh | tar -xO | bash
+```
+
 ## Configuration
 
 Optional mounts are configured in `~/.config/dev-sandbox/mounts` — one `source:target` entry per line:
