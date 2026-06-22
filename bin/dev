@@ -16,7 +16,12 @@ WORKDIR="$(pwd)"
 MOUNTS_FILE="$REPO_DIR/mounts"
 
 # --- Self-update ---
+_old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)
 git -C "$REPO_DIR" pull --quiet
+if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$_old_rev" ]; then
+  exec "$0" "$@"
+fi
+unset _old_rev
 
 # --- Build image ---
 echo "Building Docker image..."
