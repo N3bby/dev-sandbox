@@ -16,11 +16,7 @@ export PATH="$HOME/.dev-sandbox/bin:$PATH"
 
 ## Update
 
-```bash
-bash ~/.dev-sandbox/install.sh
-```
-
-The `dev` command also pulls the latest changes automatically on each run.
+The `dev` command pulls the latest changes automatically on each run — no manual update needed.
 
 ## Uninstall
 
