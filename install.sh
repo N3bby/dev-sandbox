@@ -2,31 +2,21 @@
 set -e
 
 REPO="git@github.com:n3bby/dev-sandbox.git"
-BIN_DIR="${HOME}/.local/bin"
-CONFIG_DIR="${HOME}/.config/dev-sandbox"
-MOUNTS_FILE="${CONFIG_DIR}/mounts"
+INSTALL_DIR="${HOME}/.dev-sandbox"
+MOUNTS_FILE="${INSTALL_DIR}/mounts"
 
-# --- Fetch dev script via sparse clone ---
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
-git clone --depth 1 --filter=blob:none --sparse "$REPO" "$TMPDIR"
-git -C "$TMPDIR" sparse-checkout set dev
-
-# --- Install/update dev script ---
-mkdir -p "$BIN_DIR"
-[ -f "${BIN_DIR}/dev" ] && ACTION="Updated" || ACTION="Installed"
-cp "${TMPDIR}/dev" "${BIN_DIR}/dev"
-chmod +x "${BIN_DIR}/dev"
-echo "${ACTION}: ${BIN_DIR}/dev"
-
-# --- Warn if not on PATH ---
-if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
-  echo "Warning: ${BIN_DIR} is not in your PATH. Add the following to your shell profile:"
-  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+# --- Clone or update repo ---
+if [ -d "$INSTALL_DIR/.git" ]; then
+  echo "Updating: pulling latest changes..."
+  git -C "$INSTALL_DIR" pull
+else
+  echo "Installing to ${INSTALL_DIR}..."
+  git clone "$REPO" "$INSTALL_DIR"
 fi
 
-# --- Create config dir and default mounts file ---
-mkdir -p "$CONFIG_DIR"
+chmod +x "${INSTALL_DIR}/bin/dev"
+
+# --- Create default mounts file if absent ---
 if [ ! -f "$MOUNTS_FILE" ]; then
   cat > "$MOUNTS_FILE" <<'EOF'
 # dev-sandbox mount config — one mount per line: source:target[:ro]
@@ -37,10 +27,15 @@ if [ ! -f "$MOUNTS_FILE" ]; then
 ~/.claude:/root/.claude
 ~/.claude.json:/root/.claude.json
 EOF
-  echo "Created:   ${MOUNTS_FILE}"
+  echo "Created: ${MOUNTS_FILE}"
 else
   echo "Kept existing: ${MOUNTS_FILE}"
 fi
 
+# --- Prompt to add to PATH ---
 echo ""
-echo "Done. Run 'dev' from any project directory to start a sandbox container."
+echo "Add the following to your .bashrc or .zshrc to use the dev command:"
+echo ""
+echo "  export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\""
+echo ""
+echo "Done."

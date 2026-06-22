@@ -1,41 +1,24 @@
 #!/bin/bash
 set -e
 
-# --- Config ---
+REPO_DIR="$(dirname "$(readlink -f "$0")")/.."
 CONTAINER_NAME="dev-$(basename "$(pwd)")"
-REPO="git@github.com:n3bby/dev-sandbox.git"
 IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
-MOUNTS_FILE="${HOME}/.config/dev-sandbox/mounts"
-
-# --- Fetch repo files ---
-REPODIR=$(mktemp -d)
-trap 'rm -rf "$REPODIR"' EXIT
-git clone --depth 1 --filter=blob:none --sparse "$REPO" "$REPODIR" 2>/dev/null
-git -C "$REPODIR" sparse-checkout set dev Dockerfile entrypoint.sh 2>/dev/null
+MOUNTS_FILE="$REPO_DIR/mounts"
 
 # --- Self-update ---
-SELF="$(readlink -f "$0")"
-if ! cmp -s "$REPODIR/dev" "$SELF"; then
-  echo "Updating dev..."
-  cp "$REPODIR/dev" "$SELF"
-  chmod +x "$SELF"
-  rm -rf "$REPODIR"
-  trap - EXIT
-  exec "$SELF" "$@" || exit 1
-fi
+git -C "$REPO_DIR" pull --quiet
 
 # --- Build image ---
 echo "Building Docker image..."
-docker build -t "$IMAGE_NAME" "$REPODIR"
+docker build -t "$IMAGE_NAME" "$REPO_DIR"
 
 # --- Resolve optional mounts from config ---
 MOUNTS=()
 if [ -f "$MOUNTS_FILE" ]; then
   while IFS= read -r line; do
-    # skip blank lines and comments
     [[ -z "$line" || "$line" == \#* ]] && continue
-    # expand ~ to $HOME
     line="${line/#\~/$HOME}"
     src="${line%%:*}"
     rest="${line#*:}"
