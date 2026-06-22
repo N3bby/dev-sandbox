@@ -19,9 +19,8 @@ RUN chsh -s /usr/bin/zsh
 ENV SHELL=/usr/bin/zsh
 ENV ZDOTDIR=/root
 
-# Customise Zsh prompt; disable compfix since /root is world-writable by design
-RUN sed -i '/^source \$ZSH\/oh-my-zsh.sh/i ZSH_DISABLE_COMPFIX=true' /root/.zshrc \
-    && echo "CAP_LEFT=\$'\\ue0b6'" >> /root/.zshrc \
+# Customise Zsh prompt
+RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /root/.zshrc \
     && echo "CAP_RIGHT=\$'\\ue0b4'" >> /root/.zshrc \
     && echo 'PROMPT="%F{black}${CAP_LEFT}%K{black}%fdev%k%F{black}${CAP_RIGHT}%f%k $PROMPT"' >> /root/.zshrc
 
@@ -45,11 +44,6 @@ RUN echo '. /opt/asdf/asdf.sh' >> /root/.zshrc
 # Install Java
 # RUN asdf plugin add java
 # RUN asdf install java temurin-25.0.3+9.0.LTS
-
-# Make /root fully accessible to any user so the entrypoint doesn't need a
-# slow recursive chown at container startup — only the directory itself is
-# chowned at runtime, which is instant.
-RUN chmod -R a+rwX /root
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

@@ -21,9 +21,11 @@ getent passwd "$HOST_UID" > /dev/null 2>&1 || \
 
 USERNAME=$(getent passwd "$HOST_UID" | cut -d: -f1)
 
-# /root is pre-chmod'd a+rwX in the image, so only the directory itself
-# needs chowning — no recursive walk required.
-chown "$HOST_UID:$HOST_GID" /root
+# Chown directories in /root so the user can create files inside them.
+# -type d: files are already readable at 644/755, only dirs need ownership.
+# -xdev: stay on the container filesystem — skips bind mounts, which are
+#        already owned by HOST_UID on the host.
+find /root -xdev -type d -print0 | xargs -0 chown "$HOST_UID:$HOST_GID" 2>/dev/null || true
 
 # Grant passwordless sudo
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
