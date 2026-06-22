@@ -24,11 +24,11 @@ if [ ! -f "$MOUNTS_FILE" ]; then
   cat > "$MOUNTS_FILE" <<'EOF'
 # dev-sandbox mount config — one mount per line: source:target[:ro]
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
-~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
-~/.gitconfig:/root/.gitconfig:ro
-~/.claude:/root/.claude
-~/.claude.json:/root/.claude.json
+~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
+~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
+~/.gitconfig:/home/ubuntu/.gitconfig:ro
+~/.claude:/home/ubuntu/.claude
+~/.claude.json:/home/ubuntu/.claude.json
 EOF
   echo "        ${GREEN}✅ Created:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
 else
