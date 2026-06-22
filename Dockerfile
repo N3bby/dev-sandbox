@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y curl git vim gosu
+RUN apt-get update && apt-get install -y curl git vim gosu sudo
 
 # Install UTF-8 locales \
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
