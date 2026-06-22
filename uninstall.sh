@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/bin/bash
 set -e
 
 INSTALL_DIR="${HOME}/.dev-sandbox"
@@ -13,7 +13,7 @@ if [[ "$confirm" =~ ^[Yy]$ ]]; then
   rm -rf "$INSTALL_DIR"
   echo "Removed: ${INSTALL_DIR}"
   echo ""
-  echo "Remember to remove the following line from your .zshrc:"
+  echo "Remember to remove the following line from your .bashrc or .zshrc:"
   echo ""
   echo "  export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\""
 else

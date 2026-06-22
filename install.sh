@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/bin/bash
 set -e
 
 INSTALL_DIR="${HOME}/.dev-sandbox"
@@ -24,7 +24,7 @@ fi
 
 # --- Prompt to add to PATH ---
 echo ""
-echo "Add the following to your .zshrc to use the dev command:"
+echo "Add the following to your .bashrc or .zshrc to use the dev command:"
 echo ""
 echo "  export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\""
 echo ""

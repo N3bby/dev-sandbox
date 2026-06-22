@@ -5,10 +5,10 @@ Starts a Docker container with the current directory mounted, using a shared ima
 ## Install
 
 ```bash
-git clone git@github.com:n3bby/dev-sandbox.git ~/.dev-sandbox && zsh ~/.dev-sandbox/install.sh
+git clone git@github.com:n3bby/dev-sandbox.git ~/.dev-sandbox && bash ~/.dev-sandbox/install.sh
 ```
 
-Then add to your `.zshrc`:
+Then add to your `.bashrc` or `.zshrc`:
 
 ```bash
 export PATH="$HOME/.dev-sandbox/bin:$PATH"

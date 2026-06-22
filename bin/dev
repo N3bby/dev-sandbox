@@ -1,7 +1,7 @@
-#!/usr/bin/env zsh
+#!/bin/bash
 set -e
 
-REPO_DIR="${0:A:h}/.."
+REPO_DIR="$(dirname "$(readlink -f "$0")")/.."
 CONTAINER_NAME="dev-$(basename "$(pwd)")"
 IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
