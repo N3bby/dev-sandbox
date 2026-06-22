@@ -45,6 +45,11 @@ RUN echo '. /opt/asdf/asdf.sh' >> /root/.zshrc
 # RUN asdf plugin add java
 # RUN asdf install java temurin-25.0.3+9.0.LTS
 
+# Make /root fully accessible to any user so the entrypoint doesn't need a
+# slow recursive chown at container startup — only the directory itself is
+# chowned at runtime, which is instant.
+RUN chmod -R a+rwX /root
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
