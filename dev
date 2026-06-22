@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+
+# --- Config ---
+CONTAINER_NAME="dev-$(basename "$(pwd)")"
+REPO="git@github.com:n3bby/dev-sandbox.git"
+IMAGE_NAME="capytalli-image"
+WORKDIR="$(pwd)"
+MOUNTS_FILE="${HOME}/.config/dev-sandbox/mounts"
+
+# --- Build image ---
+echo "Building Docker image from ${REPO}..."
+git archive --remote="$REPO" HEAD Dockerfile | tar -xO | docker build -t "$IMAGE_NAME" -f - .
+
+# --- Resolve optional mounts from config ---
+MOUNTS=()
+if [ -f "$MOUNTS_FILE" ]; then
+  while IFS= read -r line; do
+    # skip blank lines and comments
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    # expand ~ to $HOME
+    line="${line/#\~/$HOME}"
+    src="${line%%:*}"
+    tgt="${line#*:}"
+    if [ -e "$src" ]; then
+      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind")
+    else
+      echo "Warning: skipping mount ${src} (not found)" >&2
+    fi
+  done < "$MOUNTS_FILE"
+else
+  echo "Warning: no mounts config found at $MOUNTS_FILE — running without optional mounts" >&2
+fi
+
+# --- Run container ---
+echo "Starting container '$CONTAINER_NAME'..."
+docker run -it --rm \
+  --name "$CONTAINER_NAME" \
+  --volume "$(pwd):$WORKDIR" \
+  --workdir "$WORKDIR" \
+  "${MOUNTS[@]}" \
+  "$IMAGE_NAME"
