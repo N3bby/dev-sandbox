@@ -9,7 +9,6 @@ MOUNTS_FILE="${CONFIG_DIR}/mounts"
 # --- Install/update dev script ---
 mkdir -p "$BIN_DIR"
 [ -f "${BIN_DIR}/dev" ] && ACTION="Updated" || ACTION="Installed"
-INSTALLED_SHA="$(git ls-remote "$REPO" HEAD | cut -f1)"
 git archive --remote="$REPO" HEAD dev | tar -xO > "${BIN_DIR}/dev"
 chmod +x "${BIN_DIR}/dev"
 echo "${ACTION}: ${BIN_DIR}/dev"
@@ -36,9 +35,6 @@ EOF
 else
   echo "Kept existing: ${MOUNTS_FILE}"
 fi
-
-# --- Save version ---
-echo "$INSTALLED_SHA" > "${CONFIG_DIR}/version"
 
 echo ""
 echo "Done. Run 'dev' from any project directory to start a sandbox container."

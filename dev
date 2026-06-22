@@ -7,24 +7,20 @@ REPO="git@github.com:n3bby/dev-sandbox.git"
 IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
 MOUNTS_FILE="${HOME}/.config/dev-sandbox/mounts"
-VERSION_FILE="${HOME}/.config/dev-sandbox/version"
 
 # --- Self-update ---
 SELF="$(readlink -f "$0")"
-REMOTE_SHA="$(git ls-remote "$REPO" HEAD 2>/dev/null | cut -f1)"
-if [ -n "$REMOTE_SHA" ] && [ "$(cat "$VERSION_FILE" 2>/dev/null)" != "$REMOTE_SHA" ]; then
-  TMPSCRIPT="$(mktemp)"
-  trap 'rm -f "$TMPSCRIPT"' EXIT
-  if git archive --remote="$REPO" HEAD dev 2>/dev/null | tar -xO > "$TMPSCRIPT" 2>/dev/null \
-      && [ -s "$TMPSCRIPT" ]; then
-    echo "Updating dev..."
-    cp "$TMPSCRIPT" "$SELF"
-    chmod +x "$SELF"
-    echo "$REMOTE_SHA" > "$VERSION_FILE"
-    rm -f "$TMPSCRIPT"
-    trap - EXIT
-    exec "$SELF" "$@" || exit 1
-  fi
+TMPSCRIPT="$(mktemp)"
+trap 'rm -f "$TMPSCRIPT"' EXIT
+if git archive --remote="$REPO" HEAD dev 2>/dev/null | tar -xO > "$TMPSCRIPT" 2>/dev/null \
+    && [ -s "$TMPSCRIPT" ] \
+    && ! cmp -s "$TMPSCRIPT" "$SELF"; then
+  echo "Updating dev..."
+  cp "$TMPSCRIPT" "$SELF"
+  chmod +x "$SELF"
+  rm -f "$TMPSCRIPT"
+  trap - EXIT
+  exec "$SELF" "$@" || exit 1
 fi
 
 # --- Build image ---
