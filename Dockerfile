@@ -8,6 +8,9 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
 # Install Zsh and Oh My Zsh
+# HOME must be /root before Oh My Zsh runs — ubuntu:24.04 sets HOME=/home/ubuntu
+# in its base image ENV, which causes OMZ to bake /home/ubuntu into .zshrc.
+ENV HOME=/root
 RUN apt-get install -y zsh
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 RUN chsh -s /usr/bin/zsh
