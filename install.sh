@@ -22,10 +22,11 @@ fi
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$MOUNTS_FILE" ]; then
   cat > "$MOUNTS_FILE" <<'EOF'
-# dev-sandbox mount config — one mount per line: source:target
+# dev-sandbox mount config — one mount per line: source:target[:ro]
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh:/root/.ssh
-~/.gitconfig:/root/.gitconfig
+~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
+~/.gitconfig:/root/.gitconfig:ro
 ~/.claude:/root/.claude
 ~/.claude.json:/root/.claude.json
 EOF

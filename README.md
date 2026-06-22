@@ -16,18 +16,23 @@ git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD uninstall.sh | ta
 
 ## Configuration
 
-Optional mounts are configured in `~/.config/dev-sandbox/mounts` — one `source:target` entry per line:
+Optional mounts are configured in `~/.config/dev-sandbox/mounts` — one entry per line:
+
+```
+source:target[:ro]
+```
 
 ```
 # comments and blank lines are ignored
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh:/root/.ssh
-~/.gitconfig:/root/.gitconfig
+~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
+~/.gitconfig:/root/.gitconfig:ro
 ~/.claude:/root/.claude
 ~/.claude.json:/root/.claude.json
 ```
 
-Missing paths are skipped with a warning. Edit this file to add or remove mounts per machine.
+Append `:ro` to mount a path read-only. Missing paths are skipped with a warning. Edit this file to add or remove mounts per machine.
 
 ## Usage
 

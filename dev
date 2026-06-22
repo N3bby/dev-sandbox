@@ -21,9 +21,13 @@ if [ -f "$MOUNTS_FILE" ]; then
     # expand ~ to $HOME
     line="${line/#\~/$HOME}"
     src="${line%%:*}"
-    tgt="${line#*:}"
+    rest="${line#*:}"
+    tgt="${rest%%:*}"
+    opt="${rest#*:}"
+    extra=""
+    [[ "$opt" == "ro" ]] && extra=",readonly"
     if [ -e "$src" ]; then
-      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind")
+      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind${extra}")
     else
       echo "Warning: skipping mount ${src} (not found)" >&2
     fi
