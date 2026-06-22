@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+if [ ! -f /.dockerenv ]; then
+  echo "Error: this script must run inside a Docker container." >&2
+  exit 1
+fi
+
 HOST_UID="${HOST_UID:-0}"
 HOST_GID="${HOST_GID:-0}"
 
