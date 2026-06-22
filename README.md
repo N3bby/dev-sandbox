@@ -5,7 +5,7 @@ Starts a Docker container with the current directory mounted, using a shared ima
 ## Install
 
 ```bash
-git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar -xO | bash
+git clone --depth 1 git@github.com:n3bby/dev-sandbox.git /tmp/dev-sandbox && bash /tmp/dev-sandbox/install.sh && rm -rf /tmp/dev-sandbox
 ```
 
 ## Update
@@ -13,13 +13,13 @@ git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar 
 Same command as install — re-runs the script, overwrites the `dev` binary with the latest version, and leaves your mounts config untouched.
 
 ```bash
-git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar -xO | bash
+git clone --depth 1 git@github.com:n3bby/dev-sandbox.git /tmp/dev-sandbox && bash /tmp/dev-sandbox/install.sh && rm -rf /tmp/dev-sandbox
 ```
 
 ## Uninstall
 
 ```bash
-git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD uninstall.sh | tar -xO | bash
+git clone --depth 1 git@github.com:n3bby/dev-sandbox.git /tmp/dev-sandbox && bash /tmp/dev-sandbox/uninstall.sh && rm -rf /tmp/dev-sandbox
 ```
 
 ## Configuration

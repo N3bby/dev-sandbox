@@ -6,10 +6,16 @@ BIN_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/dev-sandbox"
 MOUNTS_FILE="${CONFIG_DIR}/mounts"
 
+# --- Fetch dev script via sparse clone ---
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+git clone --depth 1 --filter=blob:none --sparse "$REPO" "$TMPDIR"
+git -C "$TMPDIR" sparse-checkout set dev
+
 # --- Install/update dev script ---
 mkdir -p "$BIN_DIR"
 [ -f "${BIN_DIR}/dev" ] && ACTION="Updated" || ACTION="Installed"
-git archive --remote="$REPO" HEAD dev | tar -xO > "${BIN_DIR}/dev"
+cp "${TMPDIR}/dev" "${BIN_DIR}/dev"
 chmod +x "${BIN_DIR}/dev"
 echo "${ACTION}: ${BIN_DIR}/dev"
 

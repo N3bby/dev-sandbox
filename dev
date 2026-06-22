@@ -8,24 +8,26 @@ IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
 MOUNTS_FILE="${HOME}/.config/dev-sandbox/mounts"
 
+# --- Fetch repo files ---
+REPODIR=$(mktemp -d)
+trap 'rm -rf "$REPODIR"' EXIT
+git clone --depth 1 --filter=blob:none --sparse "$REPO" "$REPODIR" 2>/dev/null
+git -C "$REPODIR" sparse-checkout set dev Dockerfile entrypoint.sh 2>/dev/null
+
 # --- Self-update ---
 SELF="$(readlink -f "$0")"
-TMPSCRIPT="$(mktemp)"
-trap 'rm -f "$TMPSCRIPT"' EXIT
-if git archive --remote="$REPO" HEAD dev 2>/dev/null | tar -xO > "$TMPSCRIPT" 2>/dev/null \
-    && [ -s "$TMPSCRIPT" ] \
-    && ! cmp -s "$TMPSCRIPT" "$SELF"; then
+if ! cmp -s "$REPODIR/dev" "$SELF"; then
   echo "Updating dev..."
-  cp "$TMPSCRIPT" "$SELF"
+  cp "$REPODIR/dev" "$SELF"
   chmod +x "$SELF"
-  rm -f "$TMPSCRIPT"
+  rm -rf "$REPODIR"
   trap - EXIT
   exec "$SELF" "$@" || exit 1
 fi
 
 # --- Build image ---
-echo "Building Docker image from ${REPO}..."
-git archive --remote="$REPO" HEAD Dockerfile entrypoint.sh | docker build -t "$IMAGE_NAME" -f Dockerfile -
+echo "Building Docker image..."
+docker build -t "$IMAGE_NAME" "$REPODIR"
 
 # --- Resolve optional mounts from config ---
 MOUNTS=()
