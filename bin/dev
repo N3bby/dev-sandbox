@@ -45,4 +45,5 @@ docker run -it --rm \
   --volume "$(pwd):$WORKDIR" \
   --workdir "$WORKDIR" \
   "${MOUNTS[@]}" \
-  "$IMAGE_NAME"
+  "$IMAGE_NAME" \
+  "$@"
