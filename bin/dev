@@ -35,7 +35,7 @@ if [ -f "$MOUNTS_FILE" ]; then
     extra=""
     [[ "$opt" == "ro" ]] && extra=",readonly"
     if [ -e "$src" ]; then
-      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind,label=shared${extra}")
+      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind${extra}")
     else
       echo "Warning: skipping mount ${src} (not found)" >&2
     fi
@@ -48,6 +48,7 @@ fi
 echo "Starting container '$CONTAINER_NAME'..."
 docker run -it --rm \
   --name "$CONTAINER_NAME" \
+  --security-opt label=disable \
   --env "HOST_UID=$(id -u)" \
   --env "HOST_GID=$(id -g)" \
   --volume "$(pwd):$WORKDIR" \
