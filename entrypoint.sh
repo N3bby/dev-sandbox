@@ -25,7 +25,7 @@ USERNAME=$(getent passwd "$HOST_UID" | cut -d: -f1)
 # -type d: files are already readable at 644/755, only dirs need ownership.
 # -xdev: stay on the container filesystem — skips bind mounts, which are
 #        already owned by HOST_UID on the host.
-find /home/ubuntu -xdev -type d -print0 | xargs -0 chown "$HOST_UID:$HOST_GID" 2>/dev/null || true
+find /home/ubuntu -xdev -type d -print0 | xargs -0 chown "$HOST_UID:$HOST_GID"
 
 # Grant passwordless sudo
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
