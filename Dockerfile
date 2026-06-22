@@ -37,8 +37,8 @@ ENV PATH="/opt/asdf/bin:/opt/asdf/shims:$PATH"
 RUN echo '. /opt/asdf/asdf.sh' >> /root/.zshrc
 
 # Install Java
-RUN asdf plugin add java
-RUN asdf install java temurin-25.0.3+9.0.LTS
+# RUN asdf plugin add java
+# RUN asdf install java temurin-25.0.3+9.0.LTS
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
