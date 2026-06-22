@@ -1,12 +1,25 @@
 #!/bin/bash
 set -e
 
+BOLD=$'\033[1m'
+GREEN=$'\033[0;32m'
+CYAN=$'\033[0;36m'
+YELLOW=$'\033[0;33m'
+RESET=$'\033[0m'
+
 INSTALL_DIR="${HOME}/.dev-sandbox"
 MOUNTS_FILE="${INSTALL_DIR}/mounts"
 
-chmod +x "${INSTALL_DIR}/bin/dev"
+echo ""
+echo "${BOLD}🚀 Installing dev-sandbox${RESET}"
+echo ""
 
-# --- Create default mounts file if absent ---
+echo "  ${BOLD}[1/2]${RESET} Making dev command executable..."
+chmod +x "${INSTALL_DIR}/bin/dev"
+echo "        ${GREEN}✅ Done${RESET}"
+echo ""
+
+echo "  ${BOLD}[2/2]${RESET} Setting up mounts config..."
 if [ ! -f "$MOUNTS_FILE" ]; then
   cat > "$MOUNTS_FILE" <<'EOF'
 # dev-sandbox mount config — one mount per line: source:target[:ro]
@@ -17,15 +30,15 @@ if [ ! -f "$MOUNTS_FILE" ]; then
 ~/.claude:/root/.claude
 ~/.claude.json:/root/.claude.json
 EOF
-  echo "Created: ${MOUNTS_FILE}"
+  echo "        ${GREEN}✅ Created:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
 else
-  echo "Kept existing: ${MOUNTS_FILE}"
+  echo "        ${YELLOW}⏭️  Kept existing:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
 fi
 
-# --- Prompt to add to PATH ---
 echo ""
-echo "Add the following to your .bashrc or .zshrc to use the dev command:"
+echo "${BOLD}🎉 Installation complete!${RESET}"
 echo ""
-echo "  export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\""
+echo "  Add the following to your ${CYAN}.bashrc${RESET} or ${CYAN}.zshrc${RESET}:"
 echo ""
-echo "Done."
+echo "    ${CYAN}export PATH=\"\$HOME/.dev-sandbox/bin:\$PATH\"${RESET}"
+echo ""
