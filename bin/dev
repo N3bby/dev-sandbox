@@ -35,7 +35,7 @@ if [ -f "$MOUNTS_FILE" ]; then
     extra=""
     [[ "$opt" == "ro" ]] && extra=",readonly"
     if [ -e "$src" ]; then
-      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind${extra}")
+      MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind,label=shared${extra}")
     else
       echo "Warning: skipping mount ${src} (not found)" >&2
     fi
