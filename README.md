@@ -8,6 +8,14 @@ Starts a Docker container with the current directory mounted, using a shared ima
 git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar -xO | bash
 ```
 
+## Update
+
+Same command as install — re-runs the script, overwrites the `dev` binary with the latest version, and leaves your mounts config untouched.
+
+```bash
+git archive --remote=git@github.com:n3bby/dev-sandbox.git HEAD install.sh | tar -xO | bash
+```
+
 ## Uninstall
 
 ```bash

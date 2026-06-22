@@ -6,11 +6,12 @@ BIN_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/dev-sandbox"
 MOUNTS_FILE="${CONFIG_DIR}/mounts"
 
-# --- Install dev script ---
+# --- Install/update dev script ---
 mkdir -p "$BIN_DIR"
+[ -f "${BIN_DIR}/dev" ] && ACTION="Updated" || ACTION="Installed"
 git archive --remote="$REPO" HEAD dev | tar -xO > "${BIN_DIR}/dev"
 chmod +x "${BIN_DIR}/dev"
-echo "Installed: ${BIN_DIR}/dev"
+echo "${ACTION}: ${BIN_DIR}/dev"
 
 # --- Warn if not on PATH ---
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
