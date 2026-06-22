@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y curl git vim gosu sudo
 
-# Install UTF-8 locales \
+# Install UTF-8 locales
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
@@ -13,10 +13,10 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 RUN chsh -s /usr/bin/zsh
 ENV SHELL=/usr/bin/zsh
 
-# Customise Zsh prompt to contain name of the mounted devcontainer project
+# Customise Zsh prompt
 RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /root/.zshrc \
     && echo "CAP_RIGHT=\$'\\ue0b4'" >> /root/.zshrc \
-    && echo 'PROMPT="%F{black}${CAP_LEFT}%K{black}%f$(name=$(ls /IdeaProjects/ 2>/dev/null | head -1); echo ${name:-devcontainer})%k%F{black}${CAP_RIGHT}%f%k $PROMPT"' >> /root/.zshrc
+    && echo 'PROMPT="%F{black}${CAP_LEFT}%K{black}%fdev%k%F{black}${CAP_RIGHT}%f%k $PROMPT"' >> /root/.zshrc
 
 # Install Docker CLI
 RUN install -m 0755 -d /etc/apt/keyrings \

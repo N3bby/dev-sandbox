@@ -10,7 +10,7 @@ while [ -L "$_script" ]; do
 done
 REPO_DIR="$(cd "$(dirname "$_script")" && pwd)/.."
 unset _script _dir
-CONTAINER_NAME="dev-$(basename "$(pwd)")"
+CONTAINER_NAME="dev-$(basename "$(pwd)" | tr ' ' '_')"
 IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
 MOUNTS_FILE="$REPO_DIR/mounts"
