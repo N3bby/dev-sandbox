@@ -40,6 +40,8 @@ fi
 echo "Starting container '$CONTAINER_NAME'..."
 docker run -it --rm \
   --name "$CONTAINER_NAME" \
+  --env "HOST_UID=$(id -u)" \
+  --env "HOST_GID=$(id -g)" \
   --volume "$(pwd):$WORKDIR" \
   --workdir "$WORKDIR" \
   "${MOUNTS[@]}" \

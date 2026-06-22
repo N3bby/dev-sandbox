@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y curl git vim
+RUN apt-get update && apt-get install -y curl git vim gosu
 
 # Install UTF-8 locales \
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
@@ -39,5 +39,8 @@ RUN echo '. /opt/asdf/asdf.sh' >> /root/.zshrc
 RUN asdf plugin add java
 RUN asdf install java temurin-25.0.3+9.0.LTS
 
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/zsh"]
 
