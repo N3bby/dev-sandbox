@@ -1,18 +1,8 @@
 #!/bin/bash
 set -e
 
-REPO="git@github.com:n3bby/dev-sandbox.git"
 INSTALL_DIR="${HOME}/.dev-sandbox"
 MOUNTS_FILE="${INSTALL_DIR}/mounts"
-
-# --- Clone or update repo ---
-if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "Updating: pulling latest changes..."
-  git -C "$INSTALL_DIR" pull
-else
-  echo "Installing to ${INSTALL_DIR}..."
-  git clone "$REPO" "$INSTALL_DIR"
-fi
 
 chmod +x "${INSTALL_DIR}/bin/dev"
 
