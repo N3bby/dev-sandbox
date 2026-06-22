@@ -1,7 +1,15 @@
 #!/bin/bash
 set -e
 
-REPO_DIR="$(dirname "$(readlink -f "$0")")/.."
+# Resolve symlinks portably (readlink -f is GNU-only, not available on macOS)
+_script="$0"
+while [ -L "$_script" ]; do
+  _dir="$(cd "$(dirname "$_script")" && pwd)"
+  _script="$(readlink "$_script")"
+  case "$_script" in /*) ;; *) _script="$_dir/$_script" ;; esac
+done
+REPO_DIR="$(cd "$(dirname "$_script")" && pwd)/.."
+unset _script _dir
 CONTAINER_NAME="dev-$(basename "$(pwd)")"
 IMAGE_NAME="capytalli-image"
 WORKDIR="$(pwd)"
