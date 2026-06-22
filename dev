@@ -20,7 +20,7 @@ if git archive --remote="$REPO" HEAD dev 2>/dev/null | tar -xO > "$TMPSCRIPT" 2>
   chmod +x "$SELF"
   rm -f "$TMPSCRIPT"
   trap - EXIT
-  exec "$SELF" "$@"
+  exec "$SELF" "$@" || exit 1
 fi
 
 # --- Build image ---
