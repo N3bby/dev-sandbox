@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y curl git vim gosu sudo
+RUN apt-get update && apt-get install -y curl git vim gosu sudo unzip
 
 # Install UTF-8 locales
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
@@ -38,6 +38,9 @@ ENV PATH="/home/ubuntu/.local/bin:$PATH"
 RUN git clone https://github.com/asdf-vm/asdf.git /opt/asdf --branch v0.16.7
 ENV PATH="/opt/asdf/bin:/opt/asdf/shims:$PATH"
 RUN echo '. /opt/asdf/asdf.sh' >> /home/ubuntu/.zshrc
+
+# Install Terraform
+RUN asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git
 
 # Install Java
 # RUN asdf plugin add java
