@@ -50,3 +50,8 @@ Append `:ro` to mount a path read-only. Missing paths are skipped with a warning
 cd /your/project
 dev
 ```
+
+## Known issues / possible improvements
+- Adding dedicated mounts inside ~/.dev-sandbox/<something> for agent related files
+- Explicit agent-specific ssh keys (not mounting `id_rsa` and `id_rsa.pub` keypair of the host)
+- Making it so user inside the container doesn't need to use `sudo` to access the docker socket
