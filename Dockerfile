@@ -17,6 +17,9 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 ENV SHELL=/usr/bin/zsh
 ENV ZDOTDIR=/home/ubuntu
 
+# Set terminal color
+ENV COLORTERM=truecolor
+
 # Customise Zsh prompt
 RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /home/ubuntu/.zshrc \
     && echo "CAP_RIGHT=\$'\\ue0b4'" >> /home/ubuntu/.zshrc \
