@@ -116,7 +116,25 @@ resolve_mounts() {
     line="${line/#\~/$HOME}"
     IFS=: read -r src tgt opt <<< "$line"
     extra=""
-    [[ "$opt" == "ro" ]] && extra=",readonly"
+    [[ ",$opt," == *,ro,* ]] && extra=",readonly"
+    # `mkdir`/`touch` opts: create a missing source (a directory or an empty
+    # file, respectively) on the host first, so tool config/data can persist
+    # without pre-existing there.
+    if [ ! -e "$src" ]; then
+      if [[ ",$opt," == *,mkdir,* ]]; then
+        if mkdir -p "$src"; then
+          echo "${GREEN}Created ${src}${RESET}" >&2
+        else
+          echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
+        fi
+      elif [[ ",$opt," == *,touch,* ]]; then
+        if mkdir -p "$(dirname "$src")" && touch "$src"; then
+          echo "${GREEN}Created ${src}${RESET}" >&2
+        else
+          echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
+        fi
+      fi
+    fi
     if [ -e "$src" ]; then
       MOUNTS+=("--mount" "source=${src},target=${tgt},type=bind${extra}")
     else
