@@ -15,18 +15,24 @@ while [ -L "$_script" ]; do
 done
 REPO_DIR="$(cd "$(dirname "$_script")" && pwd)/.."
 unset _script _dir
-CONTAINER_NAME="dev-$(basename "$(pwd)" | tr ' ' '_')"
-IMAGE_NAME="capytalli-image"
-WORKDIR="/workspace/$(basename "$(pwd)")"
+CWD="$(pwd)"
+PROJECT_NAME="$(basename "$CWD")"
+# Random suffix so sandboxes in identically named dirs don't collide on --name
+CONTAINER_NAME="dev-${PROJECT_NAME// /_}-$(printf '%04x' "$RANDOM")"
+IMAGE_NAME="dev-sandbox"
+WORKDIR="/workspace/$PROJECT_NAME"
 MOUNTS_FILE="$REPO_DIR/mounts"
 
-# --- Self-update ---
+# --- Self-update (best-effort; never block on an offline or failed pull) ---
 echo "Checking for updates..."
 _old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)
-git -C "$REPO_DIR" pull --quiet
-if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$_old_rev" ]; then
-  echo "${GREEN}Updated — restarting...${RESET}"
-  exec "$0" "$@"
+if GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull --quiet; then
+  if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$_old_rev" ]; then
+    echo "${GREEN}Updated — restarting...${RESET}"
+    exec "$0" "$@"
+  fi
+else
+  echo "${YELLOW}Update check failed — continuing with current version.${RESET}" >&2
 fi
 unset _old_rev
 
@@ -61,7 +67,7 @@ docker run -it --rm \
   --security-opt label=disable \
   --env "HOST_UID=$(id -u)" \
   --env "HOST_GID=$(id -g)" \
-  --volume "$(pwd):$WORKDIR" \
+  --volume "$CWD:$WORKDIR" \
   --workdir "$WORKDIR" \
   "${MOUNTS[@]}" \
   "$IMAGE_NAME" \

@@ -20,9 +20,9 @@ Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. Th
 ## How `dev` works end-to-end
 
 1. Self-updates via `git pull` on `~/.dev-sandbox`.
-2. Builds the image tagged `capytalli-image` from `~/.dev-sandbox/Dockerfile`.
+2. Builds the image tagged `dev-sandbox` from `~/.dev-sandbox/Dockerfile`.
 3. Reads `~/.dev-sandbox/mounts`, expands `~`, skips missing paths.
-4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
+4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container, the container named `dev-<dirname>` (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
 5. `entrypoint.sh` creates a matching user inside the container and drops into it via `gosu`.
 
 ## Container user model
