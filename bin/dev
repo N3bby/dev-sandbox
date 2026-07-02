@@ -159,6 +159,7 @@ run_container() {
     --security-opt label=disable \
     --env "HOST_UID=$(id -u)" \
     --env "HOST_GID=$(id -g)" \
+    --env "IS_SANDBOX=1" \
     --volume "$CWD:$WORKDIR" \
     --workdir "$WORKDIR" \
     "${MOUNTS[@]}" \
@@ -166,18 +167,34 @@ run_container() {
     "$@"
 }
 
+# `dev claude` should behave like `sbx run claude`: launch Claude Code with
+# permission prompts disabled. Every dev container is a throwaway sandbox with
+# only the project bind-mounted, so the usual guard rails add friction without
+# much value. When the command is `claude`, inject --dangerously-skip-permissions
+# into the CMD array callers forward to the container; anything else (including a
+# bare `dev` shell) is passed through untouched. Paired with IS_SANDBOX=1 on the
+# container so the flag is also honoured when HOST_UID=0 (claude runs as root).
+enable_claude_bypass() {
+  CMD=("$@")
+  if [[ "${CMD[0]:-}" == "claude" ]]; then
+    CMD=(claude --dangerously-skip-permissions "${CMD[@]:1}")
+  fi
+}
+
 main() {
   init_environment
 
   if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
     shift
-    attach_to_container "$@"   # execs into the running container; never returns
+    enable_claude_bypass "$@"
+    attach_to_container "${CMD[@]}"   # execs into the running container; never returns
   fi
 
-  self_update "$@"             # may re-exec this script after an update
+  self_update "$@"             # may re-exec this script; pass the user's original args
   build_image
   resolve_mounts
-  run_container "$@"
+  enable_claude_bypass "$@"
+  run_container "${CMD[@]}"
 }
 
 main "$@"
