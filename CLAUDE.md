@@ -25,6 +25,10 @@ Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. Th
 4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container, the container named `dev-<dirname>` (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
 5. `entrypoint.sh` creates a matching user inside the container and drops into it via `gosu`.
 
+## Attach mode (`dev --attach` / `dev -a`)
+
+Short-circuits before self-update, build, and mount resolution, then `docker exec`s a new `gosu "$(id -u)"` shell into the container already running for the current directory. The target is identified by its bind mount (`$CWD` → `$WORKDIR`), not by name — the `dev-<dirname>-<random>` name is only a `docker ps` prefilter, since the random suffix means two same-basename directories can each have their own container. If more than one container matches, it lists them and prompts (default = newest). Extra args after `--attach` are run as the command instead of a shell (e.g. `dev --attach ls`).
+
 ## Container user model
 
 All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home directory, then chowns its *directories* (not files) to that user so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any configured `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.

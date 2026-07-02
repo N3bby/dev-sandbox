@@ -23,6 +23,49 @@ IMAGE_NAME="dev-sandbox"
 WORKDIR="/workspace/$PROJECT_NAME"
 MOUNTS_FILE="$REPO_DIR/mounts"
 
+# --- Attach mode: skip update/build, exec a new shell into a running container ---
+if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
+  shift
+
+  # Identify running dev containers for THIS directory by the CWD->WORKDIR bind
+  # mount. Name alone is ambiguous: the same basename in a different path
+  # produces the same dev-<name>-* prefix. The name filter is only a prefilter.
+  matches=()
+  while IFS= read -r name; do
+    [ -z "$name" ] && continue
+    if docker inspect -f '{{range .Mounts}}{{.Source}}={{.Destination}}{{println}}{{end}}' "$name" 2>/dev/null \
+         | grep -qxF "$CWD=$WORKDIR"; then
+      matches+=("$name")
+    fi
+  done < <(docker ps --filter "name=dev-${PROJECT_NAME// /_}-" --format '{{.Names}}')
+
+  if [ "${#matches[@]}" -eq 0 ]; then
+    echo "${YELLOW}No running dev container found for ${CWD}.${RESET}" >&2
+    echo "Start one with: ${CYAN}dev${RESET}" >&2
+    exit 1
+  fi
+
+  target="${matches[0]}"                 # docker ps lists newest first
+  if [ "${#matches[@]}" -gt 1 ]; then
+    echo "Multiple dev containers are running for this directory:"
+    for i in "${!matches[@]}"; do
+      printf "  %d) %s\n" "$((i + 1))" "${matches[$i]}"
+    done
+    printf "Attach to which? [1-%d] (default 1, newest): " "${#matches[@]}"
+    read -r choice
+    [ -z "$choice" ] && choice=1
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#matches[@]}" ]; then
+      echo "${YELLOW}Invalid selection.${RESET}" >&2
+      exit 1
+    fi
+    target="${matches[$((choice - 1))]}"
+  fi
+
+  [ "$#" -eq 0 ] && set -- /usr/bin/zsh    # default to a shell; allow `dev --attach <cmd>`
+  echo "Attaching to ${CYAN}${target}${RESET}..."
+  exec docker exec -it -w "$WORKDIR" "$target" gosu "$(id -u)" "$@"
+fi
+
 # --- Self-update (best-effort; never block on an offline or failed pull) ---
 echo "Checking for updates..."
 _old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)

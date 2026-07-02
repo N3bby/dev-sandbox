@@ -51,6 +51,14 @@ cd /your/project
 dev
 ```
 
+To open another shell in the container already running for the current directory:
+
+```bash
+dev --attach   # or: dev -a
+```
+
+`--attach` skips the image build and runs a new shell in the existing container (matched by the mounted directory). If several containers are running for the same directory, it lists them and prompts you to choose.
+
 ## Known issues / possible improvements
 - Adding dedicated mounts inside ~/.dev-sandbox/<something> for agent related files
 - Explicit agent-specific ssh keys (not mounting `id_rsa` and `id_rsa.pub` keypair of the host)
