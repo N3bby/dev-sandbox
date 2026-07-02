@@ -174,13 +174,10 @@ run_container() {
     "$@"
 }
 
-# `dev claude` should behave like `sbx run claude`: launch Claude Code with
-# permission prompts disabled. Every dev container is a throwaway sandbox with
-# only the project bind-mounted, so the usual guard rails add friction without
-# much value. When the command is `claude`, inject --dangerously-skip-permissions
-# into the CMD array callers forward to the container; anything else (including a
-# bare `dev` shell) is passed through untouched. Paired with IS_SANDBOX=1 on the
-# container so the flag is also honoured when HOST_UID=0 (claude runs as root).
+# Every dev container is a throwaway sandbox, so `dev claude` skips Claude Code's
+# permission prompts: inject --dangerously-skip-permissions when the command is
+# `claude`, pass anything else (including a bare shell) through untouched. Paired
+# with IS_SANDBOX=1 so the flag is honoured even when HOST_UID=0 (claude as root).
 enable_claude_bypass() {
   CMD=("$@")
   if [[ "${CMD[0]:-}" == "claude" ]]; then
