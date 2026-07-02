@@ -117,22 +117,28 @@ resolve_mounts() {
     IFS=: read -r src tgt opt <<< "$line"
     extra=""
     [[ ",$opt," == *,ro,* ]] && extra=",readonly"
-    # `mkdir`/`touch` opts: create a missing source (a directory or an empty
-    # file, respectively) on the host first, so tool config/data can persist
-    # without pre-existing there.
-    if [ ! -e "$src" ]; then
-      if [[ ",$opt," == *,mkdir,* ]]; then
-        if mkdir -p "$src"; then
-          echo "${GREEN}Created ${src}${RESET}" >&2
-        else
-          echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
-        fi
-      elif [[ ",$opt," == *,touch,* ]]; then
-        if mkdir -p "$(dirname "$src")" && touch "$src"; then
-          echo "${GREEN}Created ${src}${RESET}" >&2
-        else
-          echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
-        fi
+    # `mkdir`/`touch`/`json` opts: create a missing source on the host first, so
+    # tool config/data can persist without pre-existing there. `mkdir` makes a
+    # directory, `touch` an empty file, and `json` a file seeded with `{}`. The
+    # `json` case also re-seeds a source that exists but is empty: an empty file
+    # is invalid JSON, which makes tools like Claude Code fail to start.
+    if [[ ",$opt," == *,mkdir,* ]] && [ ! -e "$src" ]; then
+      if mkdir -p "$src"; then
+        echo "${GREEN}Created ${src}${RESET}" >&2
+      else
+        echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
+      fi
+    elif [[ ",$opt," == *,touch,* ]] && [ ! -e "$src" ]; then
+      if mkdir -p "$(dirname "$src")" && touch "$src"; then
+        echo "${GREEN}Created ${src}${RESET}" >&2
+      else
+        echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
+      fi
+    elif [[ ",$opt," == *,json,* ]] && [ ! -s "$src" ]; then
+      if mkdir -p "$(dirname "$src")" && printf '{}\n' > "$src"; then
+        echo "${GREEN}Seeded ${src} with {}${RESET}" >&2
+      else
+        echo "${YELLOW}Warning: could not create ${src}${RESET}" >&2
       fi
     fi
     if [ -e "$src" ]; then

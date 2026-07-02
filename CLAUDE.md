@@ -15,13 +15,13 @@ Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. Th
 - `entrypoint.sh` — runs inside the container. Creates a user/group matching `HOST_UID`/`HOST_GID`, chowns `/home/ubuntu` dirs to that user, grants passwordless sudo, then `gosu`s into the user.
 - `install.sh` — makes `bin/dev` executable and creates a default `mounts` config file at `~/.dev-sandbox/mounts`.
 - `uninstall.sh` — removes `~/.dev-sandbox/` with confirmation.
-- `mounts` — gitignored, machine-local config file (`source:target[:opts]` per line). Missing sources are skipped with a warning, unless flagged `mkdir`/`touch` (then created on the host first — as a directory or an empty file).
+- `mounts` — gitignored, machine-local config file (`source:target[:opts]` per line). Missing sources are skipped with a warning, unless flagged `mkdir`/`touch`/`json` (then created on the host first — as a directory, an empty file, or a file seeded with `{}`).
 
 ## How `dev` works end-to-end
 
 1. Self-updates via `git pull` on `~/.dev-sandbox`.
 2. Builds the image tagged `dev-sandbox` from `~/.dev-sandbox/Dockerfile`.
-3. Reads `~/.dev-sandbox/mounts`, expands `~`, skips missing sources (or creates them on the host when flagged `mkdir`/`touch`).
+3. Reads `~/.dev-sandbox/mounts`, expands `~`, skips missing sources (or creates them on the host when flagged `mkdir`/`touch`/`json`).
 4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container, the container named `dev-<dirname>` (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
 5. `entrypoint.sh` creates a matching user inside the container and drops into it via `gosu`.
 
@@ -41,11 +41,11 @@ Add `RUN` steps to `Dockerfile`. The next `dev` invocation will rebuild the imag
 
 ## The `mounts` file
 
-Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated list of `ro` (mount read-only), `mkdir` (create the source as a directory on the host if missing), and `touch` (create the source as an empty file on the host if missing, making its parent dirs). `mkdir`/`touch` mean a missing source is created instead of skipped. Comments (`#`) and blank lines are ignored. Tilde expansion is handled by `bin/dev`. This file is gitignored so it stays local to each machine — `install.sh` creates a default one on first install.
+Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated list of `ro` (mount read-only), `mkdir` (create the source as a directory on the host if missing), `touch` (create the source as an empty file on the host if missing, making its parent dirs), and `json` (like `touch`, but seed the file with `{}` — and also re-seed it if it already exists but is empty, since tools like Claude Code choke on an empty file where they expect JSON). `mkdir`/`touch`/`json` mean a missing source is created instead of skipped. Comments (`#`) and blank lines are ignored. Tilde expansion is handled by `bin/dev`. This file is gitignored so it stays local to each machine — `install.sh` creates a default one on first install.
 
 The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox`, so neither tool needs to be installed/configured on the host and nothing pollutes the host home:
 
-- `~/.dev-sandbox/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/claude/claude.json` (`touch`) → `~/.claude.json`.
+- `~/.dev-sandbox/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/claude/claude.json` (`json`) → `~/.claude.json`.
 - `~/.dev-sandbox/opencode/config` (`mkdir`) → `~/.config/opencode`, and `~/.dev-sandbox/opencode/data` (`mkdir`) → `~/.local/share/opencode`.
 
 This persists each tool's theme, API keys/auth, and global config between runs. The `~/.dev-sandbox/claude/` and `~/.dev-sandbox/opencode/` trees are gitignored so they don't interfere with the self-update `git pull`.

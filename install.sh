@@ -23,13 +23,14 @@ setup_mounts_config() {
   if [ ! -f "$MOUNTS_FILE" ]; then
     cat > "$MOUNTS_FILE" <<'EOF'
 # dev-sandbox mount config — one per line: source:target[:opts]
-# opts (comma-separated): ro = read-only, mkdir = create missing dir, touch = create missing file
+# opts (comma-separated): ro = read-only, mkdir = create missing dir,
+#   touch = create missing empty file, json = create/seed missing or empty file with {}
 /var/run/docker.sock:/var/run/docker.sock
 ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
 ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
 ~/.dev-sandbox/claude/config:/home/ubuntu/.claude:mkdir
-~/.dev-sandbox/claude/claude.json:/home/ubuntu/.claude.json:touch
+~/.dev-sandbox/claude/claude.json:/home/ubuntu/.claude.json:json
 ~/.dev-sandbox/opencode/config:/home/ubuntu/.config/opencode:mkdir
 ~/.dev-sandbox/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
 EOF
