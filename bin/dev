@@ -6,38 +6,45 @@ CYAN=$'\033[0;36m'
 YELLOW=$'\033[0;33m'
 RESET=$'\033[0m'
 
-# Resolve symlinks portably (readlink -f is GNU-only, not available on macOS)
-_script="$0"
-while [ -L "$_script" ]; do
-  _dir="$(cd "$(dirname "$_script")" && pwd)"
-  _script="$(readlink "$_script")"
-  case "$_script" in /*) ;; *) _script="$_dir/$_script" ;; esac
-done
-REPO_DIR="$(cd "$(dirname "$_script")" && pwd)/.."
-unset _script _dir
-CWD="$(pwd)"
-PROJECT_NAME="$(basename "$CWD")"
-# Random suffix so sandboxes in identically named dirs don't collide on --name
-CONTAINER_NAME="dev-${PROJECT_NAME// /_}-$(printf '%04x' "$RANDOM")"
 IMAGE_NAME="dev-sandbox"
-WORKDIR="/workspace/$PROJECT_NAME"
-MOUNTS_FILE="$REPO_DIR/mounts"
 
-# --- Attach mode: skip update/build, exec a new shell into a running container ---
-if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
-  shift
+# Resolve this script's real location (following symlinks) and derive every
+# path/name the rest of the script relies on. Sets the globals REPO_DIR, CWD,
+# PROJECT_NAME, WORKDIR, MOUNTS_FILE and CONTAINER_PREFIX.
+init_environment() {
+  # Resolve symlinks portably (readlink -f is GNU-only, not available on macOS)
+  local script="$0" dir
+  while [ -L "$script" ]; do
+    dir="$(cd "$(dirname "$script")" && pwd)"
+    script="$(readlink "$script")"
+    case "$script" in /*) ;; *) script="$dir/$script" ;; esac
+  done
 
+  REPO_DIR="$(cd "$(dirname "$script")" && pwd)/.."
+  CWD="$(pwd)"
+  PROJECT_NAME="$(basename "$CWD")"
+  WORKDIR="/workspace/$PROJECT_NAME"
+  MOUNTS_FILE="$REPO_DIR/mounts"
+  # Name prefix shared by every container for this project. The random suffix
+  # (added at run time) keeps sandboxes in identically named dirs from colliding.
+  CONTAINER_PREFIX="dev-${PROJECT_NAME// /_}-"
+}
+
+# Attach mode: skip update/build and exec a new shell into a container already
+# running for this directory. Any args are run as a command instead of a shell
+# (e.g. `dev --attach ls`). Execs on success, so this never returns.
+attach_to_container() {
   # Identify running dev containers for THIS directory by the CWD->WORKDIR bind
   # mount. Name alone is ambiguous: the same basename in a different path
   # produces the same dev-<name>-* prefix. The name filter is only a prefilter.
-  matches=()
+  local matches=() name
   while IFS= read -r name; do
     [ -z "$name" ] && continue
     if docker inspect -f '{{range .Mounts}}{{.Source}}={{.Destination}}{{println}}{{end}}' "$name" 2>/dev/null \
          | grep -qxF "$CWD=$WORKDIR"; then
       matches+=("$name")
     fi
-  done < <(docker ps --filter "name=dev-${PROJECT_NAME// /_}-" --format '{{.Names}}')
+  done < <(docker ps --filter "name=$CONTAINER_PREFIX" --format '{{.Names}}')
 
   if [ "${#matches[@]}" -eq 0 ]; then
     echo "${YELLOW}No running dev container found for ${CWD}.${RESET}" >&2
@@ -45,47 +52,65 @@ if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
     exit 1
   fi
 
-  target="${matches[0]}"                 # docker ps lists newest first
-  if [ "${#matches[@]}" -gt 1 ]; then
+  local target="${matches[0]}"             # docker ps lists newest first
+  [ "${#matches[@]}" -gt 1 ] && target="$(choose_container "${matches[@]}")"
+
+  [ "$#" -eq 0 ] && set -- /usr/bin/zsh    # default to a shell
+  echo "Attaching to ${CYAN}${target}${RESET}..."
+  exec docker exec -it -w "$WORKDIR" "$target" gosu "$(id -u)" "$@"
+}
+
+# Prompt the user to pick one of several matching containers and echo the
+# choice. Prompts go to stderr so only the chosen name lands on stdout.
+choose_container() {
+  local matches=("$@") choice i
+  {
     echo "Multiple dev containers are running for this directory:"
     for i in "${!matches[@]}"; do
       printf "  %d) %s\n" "$((i + 1))" "${matches[$i]}"
     done
     printf "Attach to which? [1-%d] (default 1, newest): " "${#matches[@]}"
-    read -r choice
-    [ -z "$choice" ] && choice=1
-    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#matches[@]}" ]; then
-      echo "${YELLOW}Invalid selection.${RESET}" >&2
-      exit 1
+  } >&2
+  read -r choice
+  [ -z "$choice" ] && choice=1
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#matches[@]}" ]; then
+    echo "${YELLOW}Invalid selection.${RESET}" >&2
+    exit 1
+  fi
+  echo "${matches[$((choice - 1))]}"
+}
+
+# Pull the latest version of this repo and restart if it changed. Best-effort:
+# an offline or failed pull never blocks the run.
+self_update() {
+  echo "Checking for updates..."
+  local old_rev
+  old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)
+  if GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull --quiet; then
+    if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$old_rev" ]; then
+      echo "${GREEN}Updated — restarting...${RESET}"
+      exec "$0" "$@"
     fi
-    target="${matches[$((choice - 1))]}"
+  else
+    echo "${YELLOW}Update check failed — continuing with current version.${RESET}" >&2
+  fi
+}
+
+build_image() {
+  echo "Building Docker image..."
+  docker build -t "$IMAGE_NAME" "$REPO_DIR"
+}
+
+# Read the optional mounts config into the MOUNTS array as `docker run` flags,
+# skipping comments, blank lines and any source path that doesn't exist.
+resolve_mounts() {
+  MOUNTS=()
+  if [ ! -f "$MOUNTS_FILE" ]; then
+    echo "${YELLOW}Warning: no mounts config found at ${MOUNTS_FILE} — running without optional mounts${RESET}" >&2
+    return
   fi
 
-  [ "$#" -eq 0 ] && set -- /usr/bin/zsh    # default to a shell; allow `dev --attach <cmd>`
-  echo "Attaching to ${CYAN}${target}${RESET}..."
-  exec docker exec -it -w "$WORKDIR" "$target" gosu "$(id -u)" "$@"
-fi
-
-# --- Self-update (best-effort; never block on an offline or failed pull) ---
-echo "Checking for updates..."
-_old_rev=$(git -C "$REPO_DIR" rev-parse HEAD)
-if GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull --quiet; then
-  if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$_old_rev" ]; then
-    echo "${GREEN}Updated — restarting...${RESET}"
-    exec "$0" "$@"
-  fi
-else
-  echo "${YELLOW}Update check failed — continuing with current version.${RESET}" >&2
-fi
-unset _old_rev
-
-# --- Build image ---
-echo "Building Docker image..."
-docker build -t "$IMAGE_NAME" "$REPO_DIR"
-
-# --- Resolve optional mounts from config ---
-MOUNTS=()
-if [ -f "$MOUNTS_FILE" ]; then
+  local line src tgt opt extra
   while IFS= read -r line; do
     [[ -z "$line" || "$line" == \#* ]] && continue
     line="${line/#\~/$HOME}"
@@ -98,20 +123,37 @@ if [ -f "$MOUNTS_FILE" ]; then
       echo "${YELLOW}Warning: skipping mount ${src} (not found)${RESET}" >&2
     fi
   done < "$MOUNTS_FILE"
-else
-  echo "${YELLOW}Warning: no mounts config found at ${MOUNTS_FILE} — running without optional mounts${RESET}" >&2
-fi
+}
 
-# --- Run container ---
-echo "Starting ${CYAN}${CONTAINER_NAME}${RESET}..."
-clear
-docker run -it --rm \
-  --name "$CONTAINER_NAME" \
-  --security-opt label=disable \
-  --env "HOST_UID=$(id -u)" \
-  --env "HOST_GID=$(id -g)" \
-  --volume "$CWD:$WORKDIR" \
-  --workdir "$WORKDIR" \
-  "${MOUNTS[@]}" \
-  "$IMAGE_NAME" \
-  "$@"
+# Start the container with the CWD mounted at WORKDIR, running as the host user.
+run_container() {
+  local container_name="${CONTAINER_PREFIX}$(printf '%04x' "$RANDOM")"
+  echo "Starting ${CYAN}${container_name}${RESET}..."
+  clear
+  docker run -it --rm \
+    --name "$container_name" \
+    --security-opt label=disable \
+    --env "HOST_UID=$(id -u)" \
+    --env "HOST_GID=$(id -g)" \
+    --volume "$CWD:$WORKDIR" \
+    --workdir "$WORKDIR" \
+    "${MOUNTS[@]}" \
+    "$IMAGE_NAME" \
+    "$@"
+}
+
+main() {
+  init_environment
+
+  if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
+    shift
+    attach_to_container "$@"   # execs into the running container; never returns
+  fi
+
+  self_update "$@"             # may re-exec this script after an update
+  build_image
+  resolve_mounts
+  run_container "$@"
+}
+
+main "$@"
