@@ -40,6 +40,7 @@ ENV PATH="/home/ubuntu/.local/bin:$PATH"
 
 # Install Opencode
 RUN curl -fsSL https://opencode.ai/install | bash
+ENV PATH="/home/ubuntu/.opencode/bin:$PATH"
 
 # Install asdf
 RUN git clone https://github.com/asdf-vm/asdf.git /opt/asdf --branch v0.16.7
