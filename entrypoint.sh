@@ -31,4 +31,18 @@ find /home/ubuntu -xdev -type d -print0 | xargs -0 chown "$HOST_UID:$HOST_GID"
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
 chmod 440 /etc/sudoers.d/devuser
 
+# Let the user talk to the Docker daemon without sudo. The mounted
+# /var/run/docker.sock is owned by a GID inherited from the host; ensure a
+# group with that GID exists and add the user to it.
+DOCKER_SOCK=/var/run/docker.sock
+if [ -S "$DOCKER_SOCK" ]; then
+  SOCK_GID=$(stat -c '%g' "$DOCKER_SOCK")
+  SOCK_GROUP=$(getent group "$SOCK_GID" | cut -d: -f1)
+  if [ -z "$SOCK_GROUP" ]; then
+    SOCK_GROUP=dockersock
+    groupadd -g "$SOCK_GID" "$SOCK_GROUP"
+  fi
+  usermod -aG "$SOCK_GROUP" "$USERNAME"
+fi
+
 exec gosu "$USERNAME" "$@"
