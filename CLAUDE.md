@@ -45,7 +45,7 @@ Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated 
 
 The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox`, so neither tool needs to be installed/configured on the host and nothing pollutes the host home:
 
-- `~/.dev-sandbox/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/claude/claude.json` (`json`) → `~/.claude.json`.
-- `~/.dev-sandbox/opencode/config` (`mkdir`) → `~/.config/opencode`, and `~/.dev-sandbox/opencode/data` (`mkdir`) → `~/.local/share/opencode`.
+- `~/.dev-sandbox/agents/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/agents/claude/claude.json` (`json`) → `~/.claude.json`.
+- `~/.dev-sandbox/agents/opencode/config` (`mkdir`) → `~/.config/opencode`, and `~/.dev-sandbox/agents/opencode/data` (`mkdir`) → `~/.local/share/opencode`.
 
-This persists each tool's theme, API keys/auth, and global config between runs. The `~/.dev-sandbox/claude/` and `~/.dev-sandbox/opencode/` trees are gitignored so they don't interfere with the self-update `git pull`.
+This persists each tool's theme, API keys/auth, and global config between runs. The `~/.dev-sandbox/agents/` tree is gitignored so it doesn't interfere with the self-update `git pull`.

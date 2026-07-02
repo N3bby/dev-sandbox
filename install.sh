@@ -29,10 +29,10 @@ setup_mounts_config() {
 ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
 ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
-~/.dev-sandbox/claude/config:/home/ubuntu/.claude:mkdir
-~/.dev-sandbox/claude/claude.json:/home/ubuntu/.claude.json:json
-~/.dev-sandbox/opencode/config:/home/ubuntu/.config/opencode:mkdir
-~/.dev-sandbox/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
+~/.dev-sandbox/agents/claude/config:/home/ubuntu/.claude:mkdir
+~/.dev-sandbox/agents/claude/claude.json:/home/ubuntu/.claude.json:json
+~/.dev-sandbox/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
+~/.dev-sandbox/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
 EOF
     echo "        ${GREEN}✅ Created:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
   else
