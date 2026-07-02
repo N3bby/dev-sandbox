@@ -22,12 +22,12 @@ Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. Th
 1. Self-updates via `git pull` on `~/.dev-sandbox`.
 2. Builds the image tagged `capytalli-image` from `~/.dev-sandbox/Dockerfile`.
 3. Reads `~/.dev-sandbox/mounts`, expands `~`, skips missing paths.
-4. Runs `docker run -it --rm` with the CWD mounted at `/home/ubuntu/project/<dirname>` inside the container (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
+4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
 5. `entrypoint.sh` creates a matching user inside the container and drops into it via `gosu`.
 
 ## Container user model
 
-All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home directory, then chowns its *directories* (not files) to that user so they can write into them. Bind mounts (the project directory and anything in `mounts`) are skipped by `-xdev` — they're already owned by the host user.
+All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home directory, then chowns its *directories* (not files) to that user so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any configured `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
 
 If `HOST_UID=0` (running as root on the host), the entrypoint skips user creation entirely and executes directly.
 

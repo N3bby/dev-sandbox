@@ -17,7 +17,7 @@ REPO_DIR="$(cd "$(dirname "$_script")" && pwd)/.."
 unset _script _dir
 CONTAINER_NAME="dev-$(basename "$(pwd)" | tr ' ' '_')"
 IMAGE_NAME="capytalli-image"
-WORKDIR="/home/ubuntu/project/$(basename "$(pwd)")"
+WORKDIR="/workspace/$(basename "$(pwd)")"
 MOUNTS_FILE="$REPO_DIR/mounts"
 
 # --- Self-update ---
