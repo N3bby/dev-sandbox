@@ -98,7 +98,9 @@ self_update() {
 
 build_image() {
   echo "Building Docker image..."
-  docker build -t "$IMAGE_NAME" "$REPO_DIR"
+  # --network=host uses the host's DNS instead of Docker's bridge resolver, which
+  # refuses lookups on some machines (VPNs, split-DNS, systemd-resolved).
+  docker build --network=host -t "$IMAGE_NAME" "$REPO_DIR"
 }
 
 # Read the optional mounts config into the MOUNTS array as `docker run` flags,
