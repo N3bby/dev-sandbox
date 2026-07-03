@@ -46,6 +46,6 @@ Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated 
 The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox`, so neither tool needs to be installed/configured on the host and nothing pollutes the host home:
 
 - `~/.dev-sandbox/agents/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/agents/claude/claude.json` (`json`) → `~/.claude.json`.
-- `~/.dev-sandbox/agents/opencode/config` (`mkdir`) → `~/.config/opencode`, and `~/.dev-sandbox/agents/opencode/data` (`mkdir`) → `~/.local/share/opencode`.
+- `~/.dev-sandbox/agents/opencode/config` (`mkdir`) → `~/.config/opencode`, `~/.dev-sandbox/agents/opencode/data` (`mkdir`) → `~/.local/share/opencode`, `~/.dev-sandbox/agents/opencode/state` (`mkdir`) → `~/.local/state/opencode`, and `~/.dev-sandbox/agents/opencode/cache` (`mkdir`) → `~/.cache/opencode`. opencode spreads its files across all four XDG dirs: config holds `opencode.json`, data holds `opencode.db`/auth, **state holds `kv.json` — the TUI-selected theme and other prefs** (so without it a changed theme resets every run), and cache holds `models.json`/downloaded bins (persisted only to avoid re-downloading).
 
 This persists each tool's theme, API keys/auth, and global config between runs. The `~/.dev-sandbox/agents/` tree is gitignored so it doesn't interfere with the self-update `git pull`.

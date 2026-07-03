@@ -33,6 +33,8 @@ setup_mounts_config() {
 ~/.dev-sandbox/agents/claude/claude.json:/home/ubuntu/.claude.json:json
 ~/.dev-sandbox/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
 ~/.dev-sandbox/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
+~/.dev-sandbox/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
+~/.dev-sandbox/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
 EOF
     echo "        ${GREEN}✅ Created:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
   else

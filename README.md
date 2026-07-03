@@ -42,9 +42,11 @@ source:target[:opts]
 ~/.dev-sandbox/agents/claude/claude.json:/home/ubuntu/.claude.json:json
 ~/.dev-sandbox/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
 ~/.dev-sandbox/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
+~/.dev-sandbox/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
+~/.dev-sandbox/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
 ```
 
-`opts` can be:
+opts` can be:
 
 - `ro` — mount the path read-only.
 - `mkdir` — create the source as a directory on the host if it's missing.
