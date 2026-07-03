@@ -32,28 +32,6 @@ grant_passwordless_sudo() {
   chmod 440 /etc/sudoers.d/devuser
 }
 
-# Make tailnet hostnames (e.g. `desktop`) resolvable inside the container. When
-# the host is on a Tailscale tailnet, Docker seeds our /etc/resolv.conf from the
-# host's config at container-create time (before this runs), copying the MagicDNS
-# `.ts.net` search domain — but not Tailscale's resolver (100.100.100.100), which
-# lives in systemd-resolved's live per-link config, not the flat file Docker
-# copies. So the search domain's presence is our signal to prepend that resolver.
-# It must go first: a normal resolver answers a `.ts.net` query with NXDOMAIN,
-# which is definitive and stops glibc from trying other servers. And its presence
-# means tailscaled is up on the host, so the resolver is reachable. No tailnet =>
-# no `.ts.net` line => this is a single grep with zero network I/O.
-enable_tailnet_dns() {
-  grep -q '^search.*\.ts\.net' /etc/resolv.conf || return 0
-  grep -q '^nameserver 100\.100\.100\.100' /etc/resolv.conf && return 0
-  local tmp
-  tmp=$(mktemp)
-  { echo "nameserver 100.100.100.100"; cat /etc/resolv.conf; } > "$tmp"
-  # `>` truncates in place: /etc/resolv.conf is a bind mount, so sed -i/mv (which
-  # rename over the file) fail with EBUSY — we must rewrite the existing inode.
-  cat "$tmp" > /etc/resolv.conf
-  rm -f "$tmp"
-}
-
 # Let the user talk to the Docker daemon without sudo. The mounted
 # /var/run/docker.sock is owned by a GID inherited from the host; ensure a
 # group with that GID exists and add the user to it.
@@ -74,8 +52,6 @@ main() {
 
   HOST_UID="${HOST_UID:-0}"
   HOST_GID="${HOST_GID:-0}"
-
-  enable_tailnet_dns   # needs root; do it before any gosu drop below
 
   # Running as root on the host: no user to remap, just run the command.
   if [ "$HOST_UID" = "0" ]; then
