@@ -156,13 +156,8 @@ run_container() {
   local container_name="${CONTAINER_PREFIX}$(printf '%04x' "$RANDOM")"
   echo "Starting ${CYAN}${container_name}${RESET}..."
   clear
-  # --dns points the container at public resolvers instead of Docker's bridge
-  # resolver, which refuses lookups on some machines (VPNs, split-DNS,
-  # systemd-resolved) — e.g. `EREFUSED` when Claude Code hits api.anthropic.com.
   docker run -it --rm \
     --name "$container_name" \
-    --dns=1.1.1.1 \
-    --dns=8.8.8.8 \
     --security-opt label=disable \
     --env "HOST_UID=$(id -u)" \
     --env "HOST_GID=$(id -g)" \
