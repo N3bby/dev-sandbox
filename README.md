@@ -72,3 +72,4 @@ dev --attach   # or: dev -a
 
 ## Known issues / possible improvements
 - Explicit agent-specific ssh keys (not mounting `id_rsa` and `id_rsa.pub` keypair of the host)
+- Install tools: python (Claude likes to use this), jq (same), scw (I often let AI use this)
