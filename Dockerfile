@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y curl git vim gosu sudo unzip
+RUN apt-get update && apt-get install -y curl git vim gosu sudo unzip jq
 
 # Install UTF-8 locales
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
@@ -48,6 +48,18 @@ RUN echo '. /opt/asdf/asdf.sh' >> /home/ubuntu/.zshrc
 
 # Install Terraform
 RUN asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git
+
+# Install Python build dependencies
+RUN apt-get install -y build-essential gdb lcov pkg-config \
+      libbz2-dev libffi-dev libgdbm-dev libgdbm-compat-dev liblzma-dev \
+      libncurses5-dev libreadline6-dev libsqlite3-dev libssl-dev \
+      lzma lzma-dev tk-dev uuid-dev zlib1g-dev libzstd-dev \
+      inetutils-inetd
+
+# Install Python
+RUN asdf plugin add python
+RUN asdf install python 3.14.6
+RUN asdf global python 3.14.6
 
 # Install Java
 # RUN asdf plugin add java
