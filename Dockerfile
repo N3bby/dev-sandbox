@@ -42,9 +42,10 @@ RUN curl -fsSL https://opencode.ai/install | bash
 ENV PATH="/home/ubuntu/.opencode/bin:$PATH"
 
 # Install asdf
-RUN git clone https://github.com/asdf-vm/asdf.git /opt/asdf --branch v0.16.7
-ENV PATH="/opt/asdf/bin:/opt/asdf/shims:$PATH"
-RUN echo '. /opt/asdf/asdf.sh' >> /home/ubuntu/.zshrc
+RUN curl -L https://github.com/asdf-vm/asdf/releases/download/v0.19.0/asdf-v0.19.0-linux-amd64.tar.gz | tar -xz -C /usr/local/bin
+ENV ASDF_DATA_DIR=/home/ubuntu/.asdf
+ENV PATH="${ASDF_DATA_DIR}/shims:$PATH"
+RUN echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> /home/ubuntu/.zshrc
 
 # Install Terraform
 RUN asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git
@@ -59,7 +60,7 @@ RUN apt-get install -y build-essential gdb lcov pkg-config \
 # Install Python
 RUN asdf plugin add python
 RUN asdf install python 3.14.6
-RUN asdf global python 3.14.6
+RUN asdf set -u python 3.14.6
 
 # Install Java
 # RUN asdf plugin add java
