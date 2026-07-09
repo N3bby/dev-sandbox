@@ -193,7 +193,6 @@ main() {
 
   if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
     shift
-    enable_claude_bypass "$@"
     attach_to_container "${CMD[@]}"   # execs into the running container; never returns
   fi
 
