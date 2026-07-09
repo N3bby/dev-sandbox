@@ -24,6 +24,7 @@ create_host_user() {
 # -xdev: stay on the container filesystem — skips bind mounts, which are
 #        already owned by HOST_UID on the host.
 take_ownership_of_home() {
+  echo "==> chown /home/ubuntu directories"
   find /home/ubuntu -xdev -type d -print0 | xargs -0 --no-run-if-empty chown "$HOST_UID:$HOST_GID"
 
   # asdf's shims are rewritten in place by `asdf reshim` (which plugins like
@@ -31,7 +32,10 @@ take_ownership_of_home() {
   # installed version. Unlike the rest of /home/ubuntu, those shim files —
   # not just their directory — need to be writable by the runtime user, or
   # reshim fails with a permission error and the install is discarded.
-  [ -d "$ASDF_DATA_DIR" ] && chown -R "$HOST_UID:$HOST_GID" "$ASDF_DATA_DIR"
+  if [ -d "$ASDF_DATA_DIR" ]; then
+    echo "==> chown -R \$ASDF_DATA_DIR"
+    chown -R "$HOST_UID:$HOST_GID" "$ASDF_DATA_DIR"
+  fi
 }
 
 grant_passwordless_sudo() {
