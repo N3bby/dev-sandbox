@@ -33,8 +33,6 @@ Short-circuits before self-update, build, and mount resolution, then `docker exe
 
 All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home directory, then chowns its *directories* (not files) to that user so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any configured `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
 
-If `HOST_UID=0` (running as root on the host), the entrypoint skips user creation entirely and executes directly.
-
 ## Adding tools to the image
 
 Add `RUN` steps to `Dockerfile`. The next `dev` invocation will rebuild the image. Tools that modify `PATH` at runtime (nvm, asdf plugins) should be initialized in `.zshrc` or `.bashrc`, not in `ENTRYPOINT`-level scripts.

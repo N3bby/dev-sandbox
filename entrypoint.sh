@@ -25,11 +25,28 @@ create_host_user() {
 #        already owned by HOST_UID on the host.
 take_ownership_of_home() {
   find /home/ubuntu -xdev -type d -print0 | xargs -0 --no-run-if-empty chown "$HOST_UID:$HOST_GID"
+
+  # asdf's shims are rewritten in place by `asdf reshim` (which plugins like
+  # nodejs run automatically after every install) to add each newly
+  # installed version. Unlike the rest of /home/ubuntu, those shim files —
+  # not just their directory — need to be writable by the runtime user, or
+  # reshim fails with a permission error and the install is discarded.
+  [ -d "$ASDF_DATA_DIR" ] && chown -R "$HOST_UID:$HOST_GID" "$ASDF_DATA_DIR"
 }
 
 grant_passwordless_sudo() {
   echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser
   chmod 440 /etc/sudoers.d/devuser
+}
+
+# The mounted project's .tool-versions may pin a version this image never
+# installed. Install anything missing before running the command, so asdf
+# shims don't fail. Best-effort: offline or a missing plugin shouldn't block
+# startup — the shim will surface the real error if the version is still gone.
+# Runs as $1 since installed versions must be owned by whoever ends up using
+# them.
+run_asdf_install() {
+  gosu "$1" asdf install || true
 }
 
 # Let the user talk to the Docker daemon without sudo. The mounted
@@ -53,16 +70,12 @@ main() {
   HOST_UID="${HOST_UID:-0}"
   HOST_GID="${HOST_GID:-0}"
 
-  # Running as root on the host: no user to remap, just run the command.
-  if [ "$HOST_UID" = "0" ]; then
-    exec "$@"
-  fi
-
   create_host_user
   take_ownership_of_home
   grant_passwordless_sudo
   grant_docker_access
 
+  run_asdf_install "$USERNAME"
   exec gosu "$USERNAME" "$@"
 }
 

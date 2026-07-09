@@ -62,6 +62,11 @@ RUN asdf plugin add python
 RUN asdf install python 3.14.6
 RUN asdf set -u python 3.14.6
 
+# Install Node.js
+RUN asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+RUN asdf install nodejs 26.5.0
+RUN asdf set -u nodejs 26.5.0
+
 # Install Java
 # RUN asdf plugin add java
 # RUN asdf install java temurin-25.0.3+9.0.LTS
