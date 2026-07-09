@@ -10,8 +10,10 @@ require_docker_container() {
   fi
 }
 
-# Create a group and user matching the host UID/GID, using /home/ubuntu as home
-# so all installed tools and dotfiles are immediately available. Sets USERNAME.
+# Slow-path fallback (UID mismatch / old image without the build-time user
+# reconciliation): create a group and user matching the host UID/GID, using
+# /home/ubuntu as home so all installed tools and dotfiles are immediately
+# available. Sets USERNAME.
 create_host_user() {
   getent group "$HOST_GID" > /dev/null 2>&1 || groupadd -g "$HOST_GID" devgroup
   getent passwd "$HOST_UID" > /dev/null 2>&1 || \
@@ -19,7 +21,8 @@ create_host_user() {
   USERNAME=$(getent passwd "$HOST_UID" | cut -d: -f1)
 }
 
-# Chown directories in /home/ubuntu so the user can create files inside them.
+# Slow-path fallback only. Chown directories in /home/ubuntu so the user can
+# create files inside them.
 # -type d: files are already readable at 644/755, only dirs need ownership.
 # -xdev: stay on the container filesystem — skips bind mounts, which are
 #        already owned by HOST_UID on the host.
@@ -74,11 +77,24 @@ main() {
   HOST_UID="${HOST_UID:-0}"
   HOST_GID="${HOST_GID:-0}"
 
-  echo "==> create_host_user"
-  create_host_user
-
-  echo "==> take_ownership_of_home"
-  take_ownership_of_home
+  # Fast path: the image was built for this host UID, so the `ubuntu` user was
+  # renumbered to it at build time and /home/ubuntu is already owned correctly —
+  # nothing to create, nothing to chown (this is the whole speedup). We take it
+  # when a username resolves for HOST_UID and either /home/ubuntu is already
+  # owned by HOST_UID, or HOST_UID is root (which can write regardless).
+  # Otherwise (UID mismatch, or an old root-owned image) fall back to creating a
+  # matching user and chowning home at runtime — self-healing but slow.
+  USERNAME=$(getent passwd "$HOST_UID" | cut -d: -f1)
+  local home_owner
+  home_owner=$(stat -c '%u' /home/ubuntu 2>/dev/null || echo -1)
+  if [ -n "$USERNAME" ] && { [ "$home_owner" = "$HOST_UID" ] || [ "$HOST_UID" = "0" ]; }; then
+    echo "==> using prebuilt user '$USERNAME' (no chown needed)"
+  else
+    echo "==> create_host_user (UID/ownership mismatch — falling back)"
+    create_host_user
+    echo "==> take_ownership_of_home"
+    take_ownership_of_home
+  fi
 
   echo "==> grant_passwordless_sudo"
   grant_passwordless_sudo

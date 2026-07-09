@@ -100,7 +100,15 @@ build_image() {
   echo "Building Docker image..."
   # --network=host uses the host's DNS instead of Docker's bridge resolver, which
   # refuses lookups on some machines (VPNs, split-DNS, systemd-resolved).
-  docker build --network=host -t "$IMAGE_NAME" "$REPO_DIR"
+  #
+  # --build-arg HOST_UID/HOST_GID bakes ownership of /home/ubuntu into the image
+  # (the Dockerfile renumbers the `ubuntu` user to match and installs as it), so
+  # there's no runtime chown. The image is built locally per host, and `id -u` is
+  # stable, so layer caching holds across runs — only the first build pays for it.
+  docker build --network=host \
+    --build-arg HOST_UID="$(id -u)" \
+    --build-arg HOST_GID="$(id -g)" \
+    -t "$IMAGE_NAME" "$REPO_DIR"
 }
 
 # Read the optional mounts config into the MOUNTS array as `docker run` flags,
