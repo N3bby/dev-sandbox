@@ -70,12 +70,22 @@ main() {
   HOST_UID="${HOST_UID:-0}"
   HOST_GID="${HOST_GID:-0}"
 
+  echo "==> create_host_user"
   create_host_user
+
+  echo "==> take_ownership_of_home"
   take_ownership_of_home
+
+  echo "==> grant_passwordless_sudo"
   grant_passwordless_sudo
+
+  echo "==> grant_docker_access"
   grant_docker_access
 
+  echo "==> run_asdf_install"
   run_asdf_install "$USERNAME"
+
+  echo "==> exec"
   exec gosu "$USERNAME" "$@"
 }
 
