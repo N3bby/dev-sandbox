@@ -47,8 +47,12 @@ RUN apt-get install -y build-essential gdb lcov pkg-config \
 # machine, the resulting layers stay cached across runs.
 ARG HOST_UID=1000
 ARG HOST_GID=1000
-RUN if [ "$HOST_GID" != "1000" ]; then groupmod -g "$HOST_GID" ubuntu; fi \
- && if [ "$HOST_UID" != "1000" ] && [ "$HOST_UID" != "0" ]; then usermod -u "$HOST_UID" -g "$HOST_GID" ubuntu; fi \
+RUN if [ "$HOST_GID" != "1000" ] && ! getent group "$HOST_GID" >/dev/null 2>&1; then \
+      groupmod -g "$HOST_GID" ubuntu; \
+    fi \
+ && if [ "$HOST_UID" != "1000" ] && [ "$HOST_UID" != "0" ]; then \
+      usermod -u "$HOST_UID" -g "$HOST_GID" ubuntu; \
+    fi \
  && chown -R "$HOST_UID:$HOST_GID" /home/ubuntu
 
 # Everything below installs into $HOME, so run it as the ubuntu user to bake in
