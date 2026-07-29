@@ -45,16 +45,6 @@ init_environment() {
   base="${base//[^a-zA-Z0-9_-]/-}"                       # sbx-safe name chars
   hash="$(printf '%s' "$CWD" | cksum | cut -d' ' -f1)"   # portable, deterministic
   SANDBOX_NAME="dev-${base}-$(printf '%04x' "$((hash % 65536))")"
-
-  # Template image + auto-build bookkeeping. The stamp records the image ID
-  # last loaded into sbx, so `dev` can skip the (slow) save+load when a rebuild
-  # produced no change. It lives in a MACHINE-LOCAL state dir (not the
-  # git-synced repo) — each machine has its own sbx runtime, so this state
-  # can't be shared.
-  TEMPLATE_IMAGE="dev-sandbox-template:latest"
-  TEMPLATE_DIR="$REPO_DIR/docker-sandbox/template"
-  STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dev-sandbox"
-  TEMPLATE_STAMP="$STATE_DIR/template.id"
 }
 
 # Ensure the sbx CLI is installed, installing it on first run if missing.
@@ -145,68 +135,28 @@ attach_to_sandbox() {
   exec sbx exec -it "$SANDBOX_NAME" "$@"
 }
 
-# Build the template and make sure sbx has the current image loaded. Runs on
-# every `dev` invocation — the build itself is cheap because Docker caches the
-# layers, so there's nothing to remember.
-#
-# The expensive part is getting the image INTO sbx: it runs each sandbox in its
-# own microVM runtime that can't see the host Docker image store, so the image
-# must be exported (`docker image save`) and imported (`sbx template load`) — a
-# multi-GB tar round-trip. We only pay that when the freshly-built image ID
-# differs from what we loaded last time (or when it's missing from sbx), so a
-# no-op rebuild stays fast. (Registry refs are pulled directly; for
-# multi-machine use, push the image and point sandbox.image at that ref.)
-ensure_template() {
-  echo "Building template image..."
-  docker build -t "$TEMPLATE_IMAGE" "$TEMPLATE_DIR"
-
-  local id prev=""
-  id="$(docker image inspect --format '{{.Id}}' "$TEMPLATE_IMAGE")"
-  [ -f "$TEMPLATE_STAMP" ] && prev="$(cat "$TEMPLATE_STAMP")"
-  if [ "$id" = "$prev" ] && sbx template ls 2>/dev/null | grep -q 'dev-sandbox-template'; then
-    return 0   # unchanged and already loaded — skip the slow save+load
-  fi
-
-  echo "Loading template into sbx..."
-  local tar="${TMPDIR:-/tmp}/dev-sandbox-template.tar"
-  docker image save "$TEMPLATE_IMAGE" -o "$tar"
-  sbx template load "$tar"
-  rm -f "$tar"
-  mkdir -p "$STATE_DIR"
-  printf '%s\n' "$id" > "$TEMPLATE_STAMP"
-}
-
-# Run the agent in the CWD. Extra args (e.g. `~/shared:ro`) pass straight
-# through to sbx as additional read-only/rw workspace mounts.
+# Run the agent in the CWD. The kit is a mixin layered onto the stock `claude`
+# agent, so we launch `claude` with the default image (no custom template to
+# build or load). Extra args (e.g. `~/shared:ro`) pass straight through as
+# additional workspace mounts; everything after `--` goes to the agent.
 run_sandbox() {
   echo "Starting ${CYAN}${SANDBOX_NAME}${RESET}..."
-  # `sbx run` mounts the CWD as the primary workspace automatically. The first
-  # positional arg is the *kit* name and must match the kit's `name:` field
-  # (dev-sandbox), NOT the agent binary — the entrypoint picks the agent.
-  exec sbx run dev-sandbox --name "$SANDBOX_NAME" --kit "$KIT" "$@"
+  # `sbx run` mounts the CWD as the primary workspace automatically. The
+  # sandbox IS the isolation boundary, so skip Claude's permission prompts.
+  exec sbx run claude --name "$SANDBOX_NAME" --kit "$KIT" "$@" -- --dangerously-skip-permissions
 }
 
 main() {
   init_environment
   ensure_sbx
 
-  # Attach short-circuits everything — the sandbox is already running, so no
-  # update/build is needed.
+  # Attach short-circuits everything — the sandbox is already running.
   if [ "${1:-}" = "--attach" ] || [ "${1:-}" = "-a" ]; then
     shift
     attach_to_sandbox "$@"       # execs; never returns
   fi
 
   self_update "$@"               # may re-exec; pass the user's original args
-
-  # --build just builds the template and stops; a bare `dev` builds it too (as
-  # part of the normal run) so you never have to remember to.
-  if [ "${1:-}" = "--build" ]; then
-    ensure_template
-    exit 0
-  fi
-
-  ensure_template
   run_sandbox "$@"
 }
 
