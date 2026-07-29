@@ -140,9 +140,18 @@ attach_to_sandbox() {
 # build or load). Extra args (e.g. `~/shared:ro`) pass straight through as
 # additional workspace mounts; everything after `--` goes to the agent.
 run_sandbox() {
+  # If a sandbox for this dir already exists, reconnect to it. `--kit` and extra
+  # workspace mounts are only valid at creation, so they're omitted here (the
+  # kit's install commands already ran when it was first created — to pick up
+  # kit changes, `sbx rm "$SANDBOX_NAME"` and re-run).
+  if sbx ls 2>/dev/null | grep -qw "$SANDBOX_NAME"; then
+    echo "Reconnecting to ${CYAN}${SANDBOX_NAME}${RESET}..."
+    exec sbx run claude --name "$SANDBOX_NAME" -- --dangerously-skip-permissions
+  fi
+  # First run for this dir: create it with the kit. `sbx run` mounts the CWD as
+  # the primary workspace automatically. The sandbox IS the isolation boundary,
+  # so skip Claude's permission prompts.
   echo "Starting ${CYAN}${SANDBOX_NAME}${RESET}..."
-  # `sbx run` mounts the CWD as the primary workspace automatically. The
-  # sandbox IS the isolation boundary, so skip Claude's permission prompts.
   exec sbx run claude --name "$SANDBOX_NAME" --kit "$KIT" "$@" -- --dangerously-skip-permissions
 }
 
