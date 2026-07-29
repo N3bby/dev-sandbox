@@ -1,0 +1,213 @@
+#!/bin/bash
+set -e
+
+# Slim `dev` wrapper around Docker Sandboxes (sbx).
+#
+# Replaces the container-orchestration version. sbx owns the heavy lifting
+# (isolation, the workspace mount, the fixed agent/UID-1000 user), so this
+# script is reduced to four jobs:
+#   0. install sbx itself if it's missing (brew on macOS, apt on Linux)
+#   1. keep the kit current across machines (git pull — the sync channel)
+#   2. run the agent in the CWD under a deterministic sandbox name
+#   3. attach a shell/command to that sandbox
+#
+# No entrypoint.sh, no UID/GID logic, no mounts file, no secrets handling.
+# Secrets are a one-time-per-machine `sbx login` / `sbx secret set`.
+
+GREEN=$'\033[0;32m'
+CYAN=$'\033[0;36m'
+YELLOW=$'\033[0;33m'
+RESET=$'\033[0m'
+
+# Resolve this script's real location (following symlinks) and derive the repo
+# dir, CWD, and a deterministic sandbox name for this directory. Two dirs with
+# the same basename get distinct names via a stable hash of the full path, so
+# `dev --attach` can recompute the exact name without any container matching.
+init_environment() {
+  local script="$0" dir
+  while [ -L "$script" ]; do
+    dir="$(cd "$(dirname "$script")" && pwd)"
+    script="$(readlink "$script")"
+    case "$script" in /*) ;; *) script="$dir/$script" ;; esac
+  done
+
+  REPO_DIR="$(cd "$(dirname "$script")" && pwd)/../.."
+  CWD="$(pwd)"
+
+  # Kit source. Defaults to the local kit in this repo (kept current by
+  # self_update's git pull). Override DEV_KIT to pin a shared git tag across
+  # machines, e.g.:
+  #   git+https://github.com/<org>/dev-sandbox.git#ref=v1.0&dir=docker-sandbox/kit
+  KIT="${DEV_KIT:-$REPO_DIR/docker-sandbox/kit}"
+
+  local base hash
+  base="$(basename "$CWD")"
+  base="${base//[^a-zA-Z0-9_-]/-}"                       # sbx-safe name chars
+  hash="$(printf '%s' "$CWD" | cksum | cut -d' ' -f1)"   # portable, deterministic
+  SANDBOX_NAME="dev-${base}-$(printf '%04x' "$((hash % 65536))")"
+
+  # Template image + auto-build bookkeeping. The stamp records the image ID
+  # last loaded into sbx, so `dev` can skip the (slow) save+load when a rebuild
+  # produced no change. It lives in a MACHINE-LOCAL state dir (not the
+  # git-synced repo) — each machine has its own sbx runtime, so this state
+  # can't be shared.
+  TEMPLATE_IMAGE="dev-sandbox-template:latest"
+  TEMPLATE_DIR="$REPO_DIR/docker-sandbox/template"
+  STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dev-sandbox"
+  TEMPLATE_STAMP="$STATE_DIR/template.id"
+}
+
+# Ensure the sbx CLI is installed, installing it on first run if missing.
+# macOS -> Homebrew tap; Debian/Ubuntu -> Docker's apt repo. Other platforms
+# (Fedora, etc.) aren't covered by Docker's installer yet, so we point at the
+# docs rather than guessing. See https://docs.docker.com/ai/sandboxes/get-started/
+ensure_sbx() {
+  command -v sbx > /dev/null 2>&1 && return 0
+  echo "${YELLOW}sbx (Docker Sandboxes) not found — installing...${RESET}"
+  case "$(uname -s)" in
+    Darwin)
+      if ! command -v brew > /dev/null 2>&1; then
+        echo "${YELLOW}Homebrew is required to install sbx. Install it from https://brew.sh then re-run.${RESET}" >&2
+        exit 1
+      fi
+      brew trust docker/tap
+      brew install docker/tap/sbx
+      ;;
+    Linux)
+      local arch
+      case "$(uname -m)" in
+        x86_64|amd64) arch=amd64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        *) echo "${YELLOW}Unsupported CPU arch '$(uname -m)'.${RESET}" >&2; exit 1 ;;
+      esac
+      if command -v dnf > /dev/null 2>&1; then
+        # Fedora/RHEL: install the el8 release RPM (RHEL-family, works on
+        # Fedora) as the `docker-sbx` package. `latest` redirects to the newest
+        # release, so this doubles as the in-place upgrade path.
+        sudo dnf install -y "https://github.com/docker/sbx-releases/releases/latest/download/DockerSandboxes-linux-${arch}-rockylinux8.rpm"
+      elif command -v apt-get > /dev/null 2>&1; then
+        # Debian/Ubuntu: Docker's apt repo carries docker-sbx.
+        curl -fsSL https://get.docker.com | sudo REPO_ONLY=1 sh
+        sudo apt-get install -y docker-sbx
+      else
+        # Fallback for immutable/atomic (Silverblue/Bazzite) or unknown distros:
+        # user-local tarball, no sudo. Lands in ~/.docker/sbx/bin.
+        local tag
+        tag=$(curl -fsSL https://api.github.com/repos/docker/sbx-releases/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+        curl -fsSL "https://github.com/docker/sbx-releases/releases/download/${tag}/DockerSandboxes-linux-${arch}.tar.gz" -o /tmp/sbx.tar.gz
+        tar -xzf /tmp/sbx.tar.gz -C /tmp
+        bash /tmp/docker-sbx/install.sh
+        export PATH="$HOME/.docker/sbx/bin:$PATH"   # for this run only
+        echo "${YELLOW}Add sbx to your PATH for future shells by adding this line to your shell rc (~/.zshrc or ~/.bashrc):${RESET}" >&2
+        echo '  export PATH="$HOME/.docker/sbx/bin:$PATH"' >&2
+      fi
+      ;;
+    *)
+      echo "${YELLOW}Unsupported platform '$(uname -s)'. See https://docs.docker.com/ai/sandboxes/get-started/${RESET}" >&2
+      exit 1
+      ;;
+  esac
+  # Fresh install: stop here rather than launching a sandbox. The user needs to
+  # run `sbx login` once first, and (for the tarball fallback) may need a new
+  # shell for sbx to be on PATH. Re-running `dev` afterwards takes the fast path.
+  echo "${GREEN}Installed sbx.${RESET} Run ${CYAN}sbx login${RESET} once to authenticate, then re-run ${CYAN}dev${RESET}."
+  exit 0
+}
+
+# Pull the latest repo so the local kit stays in sync across machines. This is
+# the surviving half of the old self_update — best-effort, never blocks a run.
+self_update() {
+  # Skip when the kit is a remote ref (sbx fetches it itself).
+  case "$KIT" in git+*|oci://*|*.zip) return 0 ;; esac
+  echo "Checking for updates..."
+  local old_rev
+  old_rev=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null) || return 0
+  if GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull --quiet; then
+    if [ "$(git -C "$REPO_DIR" rev-parse HEAD)" != "$old_rev" ]; then
+      echo "${GREEN}Updated — restarting...${RESET}"
+      exec "$0" "$@"
+    fi
+  else
+    echo "${YELLOW}Update check failed — continuing with current version.${RESET}" >&2
+  fi
+}
+
+# Attach mode: exec a shell (or a passed command) into the sandbox already
+# running for this directory. Names are deterministic, so no matching needed.
+attach_to_sandbox() {
+  if ! sbx ls 2>/dev/null | grep -qw "$SANDBOX_NAME"; then
+    echo "${YELLOW}No running sandbox '${SANDBOX_NAME}' for ${CWD}.${RESET}" >&2
+    echo "Start one with: ${CYAN}dev${RESET}" >&2
+    exit 1
+  fi
+  [ "$#" -eq 0 ] && set -- /usr/bin/zsh   # default to a shell
+  echo "Attaching to ${CYAN}${SANDBOX_NAME}${RESET}..."
+  exec sbx exec -it "$SANDBOX_NAME" "$@"
+}
+
+# Build the template and make sure sbx has the current image loaded. Runs on
+# every `dev` invocation — the build itself is cheap because Docker caches the
+# layers, so there's nothing to remember.
+#
+# The expensive part is getting the image INTO sbx: it runs each sandbox in its
+# own microVM runtime that can't see the host Docker image store, so the image
+# must be exported (`docker image save`) and imported (`sbx template load`) — a
+# multi-GB tar round-trip. We only pay that when the freshly-built image ID
+# differs from what we loaded last time (or when it's missing from sbx), so a
+# no-op rebuild stays fast. (Registry refs are pulled directly; for
+# multi-machine use, push the image and point sandbox.image at that ref.)
+ensure_template() {
+  echo "Building template image..."
+  docker build -t "$TEMPLATE_IMAGE" "$TEMPLATE_DIR"
+
+  local id prev=""
+  id="$(docker image inspect --format '{{.Id}}' "$TEMPLATE_IMAGE")"
+  [ -f "$TEMPLATE_STAMP" ] && prev="$(cat "$TEMPLATE_STAMP")"
+  if [ "$id" = "$prev" ] && sbx template ls 2>/dev/null | grep -q 'dev-sandbox-template'; then
+    return 0   # unchanged and already loaded — skip the slow save+load
+  fi
+
+  echo "Loading template into sbx..."
+  local tar="${TMPDIR:-/tmp}/dev-sandbox-template.tar"
+  docker image save "$TEMPLATE_IMAGE" -o "$tar"
+  sbx template load "$tar"
+  rm -f "$tar"
+  mkdir -p "$STATE_DIR"
+  printf '%s\n' "$id" > "$TEMPLATE_STAMP"
+}
+
+# Run the agent in the CWD. Extra args (e.g. `~/shared:ro`) pass straight
+# through to sbx as additional read-only/rw workspace mounts.
+run_sandbox() {
+  echo "Starting ${CYAN}${SANDBOX_NAME}${RESET}..."
+  # `sbx run` mounts the CWD as the primary workspace automatically. The first
+  # positional arg is the *kit* name and must match the kit's `name:` field
+  # (dev-sandbox), NOT the agent binary — the entrypoint picks the agent.
+  exec sbx run dev-sandbox --name "$SANDBOX_NAME" --kit "$KIT" "$@"
+}
+
+main() {
+  init_environment
+  ensure_sbx
+
+  # Attach short-circuits everything — the sandbox is already running, so no
+  # update/build is needed.
+  if [ "${1:-}" = "--attach" ] || [ "${1:-}" = "-a" ]; then
+    shift
+    attach_to_sandbox "$@"       # execs; never returns
+  fi
+
+  self_update "$@"               # may re-exec; pass the user's original args
+
+  # --build just builds the template and stops; a bare `dev` builds it too (as
+  # part of the normal run) so you never have to remember to.
+  if [ "${1:-}" = "--build" ]; then
+    ensure_template
+    exit 0
+  fi
+
+  ensure_template
+  run_sandbox "$@"
+}
+
+main "$@"

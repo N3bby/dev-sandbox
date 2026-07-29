@@ -1,0 +1,79 @@
+# Kit for the dev sandbox.
+#
+# This replaces the old `mounts` file + entrypoint.sh runtime setup + the
+# claude-bypass hack. It layers declarative config onto the template image:
+# network allowlist, injected files, agent context, and the entrypoint.
+#
+# Applied at creation time:  sbx run claude --kit ./docker-sandbox/kit
+# (the `dev` wrapper does this for you)
+#
+# SCHEMA VERSION NOTE: this uses the v0.32.0+ field names (`kind: sandbox`, a
+# `sandbox:` block, `agentContext:`). Requires sbx >= 0.32.0 — check with
+# `sbx version`. Older sbx used `kind: agent` / `agent:` / `memory:`.
+
+schemaVersion: "1"
+kind: sandbox
+name: dev-sandbox
+displayName: Dev Sandbox
+description: Ubuntu + zsh/omz, asdf (python/node/terraform), Docker CLI, Claude Code.
+
+sandbox:
+  # The template built from docker-sandbox/template/Dockerfile. Point this at
+  # your registry once pushed (e.g. ghcr.io/<org>/dev-sandbox-template:latest)
+  # so every machine pulls the same image.
+  image: dev-sandbox-template:latest
+  # AI instructions filename surfaced to the agent in the workspace.
+  aiFilename: CLAUDE.md
+  entrypoint:
+    # The sandbox IS the isolation boundary, so skip Claude's permission prompts
+    # by default — this is the sbx-native replacement for the old
+    # enable_claude_bypass + IS_SANDBOX=1 dance.
+    run: ["claude"]
+    args: ["--dangerously-skip-permissions"]
+
+# Deny-by-default egress: only these domains are reachable. Trim/extend per your
+# stack. Most toolchains are baked into the template at build time, so this list
+# only needs the domains hit at RUNTIME (agent API, git, project deps).
+network:
+  allowedDomains:
+    - api.anthropic.com          # Claude API
+    - registry.npmjs.org         # npm
+    - pypi.org                   # pip
+    - files.pythonhosted.org     # pip package files
+    - github.com                 # git + asdf plugins
+    - api.github.com
+    - codeload.github.com
+    - objects.githubusercontent.com
+    - raw.githubusercontent.com
+    - nodejs.org                 # asdf node downloads (runtime installs)
+    - releases.hashicorp.com     # terraform
+    - registry.terraform.io
+    # OS package installs at runtime (`sudo apt install …`). The image ships
+    # apt's package index, so no `apt update` is needed — but apt still fetches
+    # the actual .deb files from these mirrors at install time.
+    - archive.ubuntu.com         # main Ubuntu archive (amd64)
+    - security.ubuntu.com        # Ubuntu security updates
+    - ports.ubuntu.com           # Ubuntu archive for arm64 (Apple Silicon)
+    - download.docker.com        # Docker's apt repo (docker-ce-cli, etc.)
+
+# Non-secret preferences that should SYNC across machines live in files/ and get
+# injected at creation. This is how opencode's theme (previously machine-local
+# and gitignored) can become synced-by-default:
+#
+#   files/home/       -> /home/agent/
+#   files/workspace/  -> primary workspace
+#
+# Secrets do NOT go here — set them per machine with `sbx secret set` (or wire
+# `credentials.sources` below to the host-side proxy).
+
+# Example: inject a value the proxy fills in at request time (kept out of the VM)
+# credentials:
+#   sources:
+#     anthropic:
+#       env: [ANTHROPIC_API_KEY]
+
+agentContext: |
+  # Dev sandbox
+  This is an isolated Docker Sandbox. Tools available: git, zsh, asdf
+  (python/node/terraform), the Docker CLI (private engine only — the host
+  daemon is not reachable), and Claude Code.
