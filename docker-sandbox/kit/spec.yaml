@@ -48,9 +48,9 @@ network:
 # $HOME). Order matters — these run top to bottom.
 commands:
   install:
-    - command: "apt-get update && apt-get install -y zsh unzip"
+    - command: "apt-get update && apt-get install -y zsh unzip build-essential libssl-dev libffi-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev liblzma-dev libncurses-dev tk-dev uuid-dev"
       user: "0"
-      description: Zsh + unzip
+      description: Zsh + unzip + CPython build deps (for asdf python)
 
     - command: "curl -fsSL https://github.com/asdf-vm/asdf/releases/download/v0.19.0/asdf-v0.19.0-linux-amd64.tar.gz | tar -xz -C /usr/local/bin"
       user: "0"
@@ -76,6 +76,14 @@ commands:
     - command: "asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git"
       user: "1000"
       description: Add asdf terraform plugin
+
+    - command: "asdf plugin add python && asdf install python 3.14.6 && asdf set -u python 3.14.6"
+      user: "1000"
+      description: Install pinned Python via asdf
+
+    - command: "asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git && asdf install nodejs 26.5.0 && asdf set -u nodejs 26.5.0"
+      user: "1000"
+      description: Install pinned Node.js via asdf
 
 environment:
   variables:
