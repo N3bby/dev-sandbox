@@ -21,8 +21,11 @@ RUN echo 'PROMPT="[sandbox] $PROMPT"' >> /home/agent/.zshrc
 # Install asdf
 USER agent
 RUN curl -L https://github.com/asdf-vm/asdf/releases/download/v0.20.0/asdf-v0.20.0-linux-amd64.tar.gz | tar -xz -C /home/agent/.local/bin
-RUN echo "ASDF_DATA_DIR=/home/agent/.asdf" >> /home/agent/.zshrc
-RUN echo "PATH=\"/home/agent/.asdf/shims:$PATH\"" >> /home/agent/.zshrc
+RUN echo 'export ASDF_DATA_DIR=/home/agent/.asdf' >> /home/agent/.zshenv
+RUN echo 'export PATH="/home/agent/.asdf/shims:$PATH"' >> /home/agent/.zshenv
+RUN echo 'export ASDF_DATA_DIR=/home/agent/.asdf' >> /home/agent/.bash_profile
+RUN echo 'export PATH="/home/agent/.asdf/shims:$PATH"' >> /home/agent/.bash_profile
+ENV BASH_ENV=/home/agent/.bash_profile
 
 # Install terraform
 RUN asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git
@@ -50,10 +53,6 @@ USER agent
 RUN asdf plugin add python
 RUN asdf install python 3.14.6
 RUN asdf set -u python 3.14.6
-
-# Install extra tooling
-USER root
-RUN apt-get install -y vim
 
 # Change user back to agent
 USER agent
