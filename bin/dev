@@ -31,6 +31,9 @@ TEMPLATE_TAG="dev-sandbox-sbx:claude-code"
 TEMPLATE_REPO="dev-sandbox-sbx"
 # Which agent `sbx run` launches when no override is given on the command line.
 DEFAULT_AGENT="claude"
+# When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
+# starts on an older Sonnet). Passed through the `--` separator to the agent.
+DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR,
@@ -251,11 +254,22 @@ run_sandbox() {
   SANDBOX_NAME="${SANDBOX_PREFIX}$(printf '%d-%04x' "$$" "$RANDOM")"
   trap cleanup_sandbox EXIT INT TERM
 
+  # Default the claude agent to Sonnet 5, unless the caller is already forwarding
+  # their own agent arguments (a `--` in the args), in which case leave the model
+  # choice to them. Everything after `--` is handed straight to the agent.
+  local agent_args=() has_dashdash=0 a
+  for a in "$@"; do
+    [ "$a" = "--" ] && has_dashdash=1 && break
+  done
+  if [ "${1:-}" = "claude" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(-- --model "$DEFAULT_CLAUDE_MODEL")
+  fi
+
   echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
   # Pass the workspace explicitly so it's mounted and recorded (that recorded
   # path is what `-a` matches on). `|| true` keeps a non-zero agent exit from
   # tripping `set -e` before the cleanup trap runs.
-  sbx run --name "$SANDBOX_NAME" --template "$TEMPLATE_TAG" "$@" "$CWD" || true
+  sbx run --name "$SANDBOX_NAME" --template "$TEMPLATE_TAG" "$@" "$CWD" "${agent_args[@]}" || true
 }
 
 main() {
