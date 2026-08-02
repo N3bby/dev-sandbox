@@ -57,8 +57,15 @@ init_environment() {
   CWD="$(pwd)"
   CWD_REAL="$(pwd -P)"
   PROJECT_NAME="$(basename "$CWD")"
-  # Sandbox names must be a stable slug; keep it to a safe charset.
-  SANDBOX_PREFIX="dev-$(printf '%s' "$PROJECT_NAME" | tr -c 'A-Za-z0-9_-' '_')-"
+  # Sandbox names must be a stable slug over a safe charset. sbx forbids
+  # underscores outright, so map every char outside [A-Za-z0-9-] to '-',
+  # collapse runs of '-', and trim leading/trailing '-' (e.g. a dotfile dir
+  # like ".dev-sandbox" would otherwise start with a stray separator).
+  local slug
+  slug="$(printf '%s' "$PROJECT_NAME" | tr -c 'A-Za-z0-9-' '-' | tr -s '-')"
+  slug="${slug#-}"
+  slug="${slug%-}"
+  SANDBOX_PREFIX="dev-${slug}-"
 }
 
 # Abort early with a clear message if the tools we need aren't on PATH.
