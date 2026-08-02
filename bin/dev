@@ -36,14 +36,12 @@ DEFAULT_AGENT="shell"
 # When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
 # starts on an older Sonnet). Passed through the `--` separator to the agent.
 DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
-# Mixin kits (`sbx --kit`) layered onto the claude-code variant only: a custom
-# statusline and the private claude-dashboard plugin. They configure Claude
-# Code's settings.json, so they're applied under both the shell and claude agents
-# (which share the claude-code image) — running `claude` from a shell session is
-# then already set up — but skipped for the codex variant, whose image has no
-# Claude settings to configure. Directory names under $REPO_DIR/docker-sandbox/
-# kits; full paths are resolved in run_sandbox once REPO_DIR is known.
-KITS=("statusline" "claude-dashboard")
+# Mixin kits (`sbx --kit`) layered onto each image variant. Shell and Claude
+# share the claude-code image and its Claude settings; Codex has a separate kit
+# for Codex-specific defaults. Directory names live under
+# $REPO_DIR/docker-sandbox/kits; run_sandbox resolves them to full paths.
+CLAUDE_CODE_KITS=("statusline" "claude-dashboard")
+CODEX_KITS=("codex-config")
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR, CWD,
@@ -311,14 +309,16 @@ run_sandbox() {
     agent_args=(-- -c "exec zsh")
   fi
 
-  # Kits configure Claude Code's settings.json, so apply them to the claude-code
-  # variant (shell and claude) but not codex.
-  local kit_args=() k
+  # Select the kits belonging to this image variant.
+  local kit_args=() selected_kits=() k
   if [ "$VARIANT" = "claude-code" ]; then
-    for k in "${KITS[@]}"; do
-      kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
-    done
+    selected_kits=("${CLAUDE_CODE_KITS[@]}")
+  elif [ "$VARIANT" = "codex" ]; then
+    selected_kits=("${CODEX_KITS[@]}")
   fi
+  for k in "${selected_kits[@]}"; do
+    kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
+  done
 
   echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
   # Pass the workspace explicitly so it's mounted and recorded (that recorded
