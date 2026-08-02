@@ -27,8 +27,8 @@ setup_mounts_config() {
 # opts (comma-separated): ro = read-only, mkdir = create missing dir,
 #   touch = create missing empty file, json = create/seed missing or empty file with {}
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
-~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
+# ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
+# ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
 ~/.dev-sandbox/docker-container/agents/claude/config:/home/ubuntu/.claude:mkdir
 ~/.dev-sandbox/docker-container/agents/claude/claude.json:/home/ubuntu/.claude.json:json

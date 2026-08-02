@@ -40,8 +40,8 @@ source:target[:opts]
 ```
 # comments and blank lines are ignored
 /var/run/docker.sock:/var/run/docker.sock
-~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
-~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
+# ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
+# ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
 ~/.dev-sandbox/docker-container/agents/claude/config:/home/ubuntu/.claude:mkdir
 ~/.dev-sandbox/docker-container/agents/claude/claude.json:/home/ubuntu/.claude.json:json
