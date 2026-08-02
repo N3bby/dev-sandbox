@@ -18,9 +18,9 @@ bin/dev                      # docker-sandbox entry point (sbx)
 bin/dev-container            # docker-container entry point (docker run)
 docker-sandbox/              # everything the `dev` command uses
   template/                  #   sbx template image definition
-    Dockerfile
-    dev-sandbox-sbx.tar      #   built template, gitignored (docker image save)
-  kits/                      #   sbx mixin kits (--kit) layered onto every sandbox
+    Dockerfile               #   base image is an ARG (BASE_IMAGE), set per agent variant
+    dev-sandbox-sbx-*.tar    #   built template per variant, gitignored (docker image save)
+  kits/                      #   sbx mixin kits (--kit) layered onto the claude-code variant
     statusline/
     claude-dashboard/
 docker-container/            # everything the `dev-container` command uses
@@ -39,8 +39,8 @@ Shared files (`install.sh`, `uninstall.sh`, `README.md`, this file) stay at the 
 `bin/dev`. End-to-end:
 
 1. Self-updates via `git pull` on `~/.dev-sandbox`; re-execs (carrying `DEV_SBX_REBUILD=1`) if HEAD moved.
-2. Builds the template image from `docker-sandbox/template/` and `docker image save`s it to `docker-sandbox/template/dev-sandbox-sbx.tar`, then imports it with `sbx template load`. Rebuilds when the pull brought a change, the tar is missing, or the template isn't in `sbx` yet.
-3. Starts a fresh sandbox for the current directory with a unique name (`dev-<slug>-<pid>-<rand>`), so repeated runs in one directory yield independent sandboxes. The mixin kits from `docker-sandbox/kits/` are layered on via `--kit` for every sandbox regardless of agent. The default agent is a plain `shell`; running `dev claude` instead launches the Claude Code agent, which additionally pins the model to a default. On exit (or Ctrl-C) the sandbox is stopped and removed via a trap.
+2. Builds the template image *for the requested agent's variant* from `docker-sandbox/template/` and `docker image save`s it to `docker-sandbox/template/dev-sandbox-sbx-<variant>.tar`, then imports it with `sbx template load`. The one `Dockerfile` is parameterized by a `BASE_IMAGE` build-arg: the `claude-code` variant (used by the `shell` and `claude` agents) builds from the claude-code base image, the `codex` variant (used by `codex`) from the codex base image. Each variant is a separate tag (`dev-sandbox-sbx:<variant>`) with its own tar, built/cached independently, so only the variant needed for this run is built. Rebuilds when the pull brought a change, that variant's tar is missing, or that variant isn't in `sbx` yet.
+3. Starts a fresh sandbox for the current directory with a unique name (`dev-<slug>-<pid>-<rand>`), so repeated runs in one directory yield independent sandboxes. The mixin kits from `docker-sandbox/kits/` are layered on via `--kit` only for the `claude-code` variant (they configure Claude Code's `settings.json`, which the codex image has no use for) — so both `shell` and `claude` get them, `codex` does not. The default agent is a plain `shell`; running `dev claude` launches the Claude Code agent, which additionally pins the model to a default; `dev codex` launches the Codex agent. On exit (or Ctrl-C) the sandbox is stopped and removed via a trap.
 
 `dev -a` / `--attach` short-circuits all of the above and `sbx exec`s a zsh shell into a running sandbox for the current directory, matching on the recorded workspace path (both logical and symlink-resolved). Prompts when several match. Extra args after `--attach` run as the command instead of a shell.
 

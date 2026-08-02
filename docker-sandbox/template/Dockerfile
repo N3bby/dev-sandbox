@@ -1,4 +1,9 @@
-FROM docker/sandbox-templates:claude-code-docker
+# Base image is chosen per agent variant by `bin/dev` (--build-arg BASE_IMAGE=…):
+# the claude-code image for the shell/claude agents, the codex image for codex.
+# Both bundle their agent CLI and share the same `agent` user + /home/agent, so
+# everything below applies unchanged regardless of which base is used.
+ARG BASE_IMAGE=docker/sandbox-templates:claude-code-docker
+FROM ${BASE_IMAGE}
 USER root
 
 # Remove pre-installed runtimes from image
@@ -18,9 +23,10 @@ USER agent
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 RUN echo 'PROMPT="[sandbox] $PROMPT"' >> /home/agent/.zshrc
 
-# Install asdf
+# Install asdf (the codex base image lacks ~/.local/bin, so create it first)
 USER agent
-RUN curl -L https://github.com/asdf-vm/asdf/releases/download/v0.20.0/asdf-v0.20.0-linux-amd64.tar.gz | tar -xz -C /home/agent/.local/bin
+RUN mkdir -p /home/agent/.local/bin && \
+    curl -L https://github.com/asdf-vm/asdf/releases/download/v0.20.0/asdf-v0.20.0-linux-amd64.tar.gz | tar -xz -C /home/agent/.local/bin
 RUN echo 'export ASDF_DATA_DIR=/home/agent/.asdf' >> /home/agent/.zshenv
 RUN echo 'export PATH="/home/agent/.asdf/shims:$PATH"' >> /home/agent/.zshenv
 RUN echo 'export ASDF_DATA_DIR=/home/agent/.asdf' >> /home/agent/.bash_profile

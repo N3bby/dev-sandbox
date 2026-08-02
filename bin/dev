@@ -24,10 +24,10 @@ YELLOW=$'\033[0;33m'
 RED=$'\033[0;31m'
 RESET=$'\033[0m'
 
-# Docker image tag for the template, and the tar we save it to before importing
-# into sbx. The tag's repository (dev-sandbox-sbx) is what we grep `sbx template
-# ls` for to tell whether the template is already imported.
-TEMPLATE_TAG="dev-sandbox-sbx:claude-code"
+# Docker image repo for our templates. Each agent variant (claude-code, codex)
+# is a tag under this repo with its own saved tar, built from the one Dockerfile
+# but a different base image and loaded into sbx independently. resolve_variant
+# sets VARIANT, BASE_IMAGE, TEMPLATE_TAG and TEMPLATE_TAR for the requested agent.
 TEMPLATE_REPO="dev-sandbox-sbx"
 # Which agent `sbx run` launches when no override is given on the command line.
 # Defaults to a plain shell; run `dev claude` to launch the Claude Code agent
@@ -36,17 +36,18 @@ DEFAULT_AGENT="shell"
 # When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
 # starts on an older Sonnet). Passed through the `--` separator to the agent.
 DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
-# Mixin kits (`sbx --kit`) layered onto every sandbox regardless of agent: a
-# custom statusline and the private claude-dashboard plugin. They configure
-# Claude Code's settings.json, so applying them even under the shell agent means
-# running `claude` from within the shell is already set up. Directory names under
-# $REPO_DIR/docker-sandbox/kits; full paths are resolved in run_sandbox once
-# REPO_DIR is known.
+# Mixin kits (`sbx --kit`) layered onto the claude-code variant only: a custom
+# statusline and the private claude-dashboard plugin. They configure Claude
+# Code's settings.json, so they're applied under both the shell and claude agents
+# (which share the claude-code image) — running `claude` from a shell session is
+# then already set up — but skipped for the codex variant, whose image has no
+# Claude settings to configure. Directory names under $REPO_DIR/docker-sandbox/
+# kits; full paths are resolved in run_sandbox once REPO_DIR is known.
 KITS=("statusline" "claude-dashboard")
 
 # Resolve this script's real location (following symlinks) and derive the paths
-# and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR,
-# TEMPLATE_TAR, CWD, CWD_REAL, PROJECT_NAME and SANDBOX_PREFIX.
+# and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR, CWD,
+# CWD_REAL, PROJECT_NAME and SANDBOX_PREFIX.
 init_environment() {
   # readlink -f is GNU-only (absent on macOS), so walk the symlink chain by hand.
   local script="$0" dir
@@ -58,7 +59,6 @@ init_environment() {
 
   REPO_DIR="$(cd "$(dirname "$script")/.." && pwd)"
   TEMPLATE_DIR="$REPO_DIR/docker-sandbox/template"
-  TEMPLATE_TAR="$TEMPLATE_DIR/dev-sandbox-sbx.tar"
 
   # Two spellings of the current directory: the logical path (what the user sees
   # and what sbx is handed) and the physical, symlink-resolved path. A sandbox's
@@ -75,6 +75,26 @@ init_environment() {
   slug="${slug#-}"
   slug="${slug%-}"
   SANDBOX_PREFIX="dev-${slug}-"
+}
+
+# Map the requested agent to a build variant and set the globals the build/run
+# steps key off. Each variant pairs a base image (which bundles that agent's CLI)
+# with its own template tag and saved tar, so the claude and codex images are
+# built and cached independently. shell/claude share the claude-code image; codex
+# uses its own. Sets VARIANT, BASE_IMAGE, TEMPLATE_TAG and TEMPLATE_TAR.
+resolve_variant() {
+  case "${1:-}" in
+    codex)
+      VARIANT="codex"
+      BASE_IMAGE="docker/sandbox-templates:codex-docker"
+      ;;
+    *)
+      VARIANT="claude-code"
+      BASE_IMAGE="docker/sandbox-templates:claude-code-docker"
+      ;;
+  esac
+  TEMPLATE_TAG="${TEMPLATE_REPO}:${VARIANT}"
+  TEMPLATE_TAR="${TEMPLATE_DIR}/${TEMPLATE_REPO}-${VARIANT}.tar"
 }
 
 # Abort early with a clear message if the tools we need aren't on PATH.
@@ -203,9 +223,11 @@ self_update() {
   fi
 }
 
-# Is the template already imported into sbx's image store?
+# Is this run's variant already imported into sbx's image store? Match a line
+# mentioning both our repo and the variant, so the two variants are tracked
+# independently whether `sbx template ls` prints "repo:tag" or separate columns.
 template_in_sbx() {
-  sbx template ls 2>/dev/null | grep -qF "$TEMPLATE_REPO"
+  sbx template ls 2>/dev/null | grep -F "$TEMPLATE_REPO" | grep -qF "$VARIANT"
 }
 
 # Build the template image and, when a build happened, import it into sbx.
@@ -219,6 +241,10 @@ build_and_import_template() {
   local need_build=0
   if [ "${DEV_SBX_REBUILD:-0}" = "1" ]; then
     need_build=1
+    # An update may have changed the shared Dockerfile, so every variant's saved
+    # tar is now potentially stale. Drop them all: the one we're about to build is
+    # rebuilt now, the others rebuild the next time their agent is launched.
+    rm -f "$TEMPLATE_DIR/$TEMPLATE_REPO"-*.tar
   elif [ ! -f "$TEMPLATE_TAR" ]; then
     echo "${YELLOW}No saved template found — building.${RESET}"
     need_build=1
@@ -235,7 +261,9 @@ build_and_import_template() {
   echo "Building template image ${CYAN}${TEMPLATE_TAG}${RESET}..."
   # --network=host uses the host DNS resolver instead of Docker's bridge one,
   # which refuses lookups on some machines (VPNs, split-DNS, systemd-resolved).
-  docker build --network=host -t "$TEMPLATE_TAG" "$TEMPLATE_DIR"
+  # --build-arg picks the base image that bundles this variant's agent CLI.
+  docker build --network=host --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+    -t "$TEMPLATE_TAG" "$TEMPLATE_DIR"
 
   echo "Saving template to ${CYAN}${TEMPLATE_TAR}${RESET}..."
   docker image save "$TEMPLATE_TAG" -o "$TEMPLATE_TAR"
@@ -284,13 +312,17 @@ run_sandbox() {
     agent_args=(-- -c "exec zsh")
   fi
 
-  # Layer the mixin kits onto every sandbox. `--kit` is a create-time flag, which
-  # fits: run_sandbox always creates a fresh sandbox. Applied regardless of agent
-  # so a shell session that later launches `claude` is already configured.
+  # Layer the mixin kits onto the claude-code variant only. `--kit` is a
+  # create-time flag, which fits: run_sandbox always creates a fresh sandbox.
+  # Applied for both shell and claude (they share the claude-code image) so a
+  # shell session that later launches `claude` is already configured, but skipped
+  # for the codex variant, whose image has no Claude settings for them to write.
   local kit_args=() k
-  for k in "${KITS[@]}"; do
-    kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
-  done
+  if [ "$VARIANT" = "claude-code" ]; then
+    for k in "${KITS[@]}"; do
+      kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
+    done
+  fi
 
   echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
   # Pass the workspace explicitly so it's mounted and recorded (that recorded
@@ -308,13 +340,16 @@ main() {
   fi
 
   self_update "$@"           # may re-exec this script; pass original args through
-  build_and_import_template
 
   # Everything after the (optional) agent name is forwarded to `sbx run`; with
   # no args we launch the default agent.
   if [ "$#" -eq 0 ]; then
     set -- "$DEFAULT_AGENT"
   fi
+
+  # The first arg is the agent; it selects which image variant to build and load.
+  resolve_variant "$1"
+  build_and_import_template
   run_sandbox "$@"
 }
 

@@ -69,6 +69,16 @@ dev              # sbx sandbox
 dev-container    # docker run container
 ```
 
+`dev` launches a plain shell by default. Pass an agent to launch it instead:
+
+```bash
+dev claude       # Claude Code (default model pinned)
+dev codex        # Codex
+```
+
+`claude` and `shell` share one template image; `codex` uses its own (built from
+the codex base image and cached separately, so the first `dev codex` builds it).
+
 To open another shell in the sandbox/container already running for the current directory:
 
 ```bash
