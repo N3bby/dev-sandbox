@@ -36,7 +36,7 @@ DEFAULT_AGENT="claude"
 DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
 # Mixin kits (`sbx --kit`) layered onto the claude agent: a custom statusline
 # and the private claude-dashboard plugin. Directory names under $REPO_DIR/
-# sbx-kits; the full paths are resolved in run_sandbox once REPO_DIR is known.
+# docker-sandbox/kits; the full paths are resolved in run_sandbox once REPO_DIR is known.
 CLAUDE_KITS=("statusline" "claude-dashboard")
 
 # Resolve this script's real location (following symlinks) and derive the paths
@@ -52,7 +52,7 @@ init_environment() {
   done
 
   REPO_DIR="$(cd "$(dirname "$script")/.." && pwd)"
-  TEMPLATE_DIR="$REPO_DIR/sbx-template"
+  TEMPLATE_DIR="$REPO_DIR/docker-sandbox/template"
   TEMPLATE_TAR="$TEMPLATE_DIR/dev-sandbox-sbx.tar"
 
   # Two spellings of the current directory: the logical path (what the user sees
@@ -282,7 +282,7 @@ run_sandbox() {
   local kit_args=() k
   if [ "${1:-}" = "claude" ]; then
     for k in "${CLAUDE_KITS[@]}"; do
-      kit_args+=(--kit "$REPO_DIR/sbx-kits/$k")
+      kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
     done
   fi
 

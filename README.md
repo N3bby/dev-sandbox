@@ -1,6 +1,11 @@
 # dev-sandbox
 
-Starts a Docker container with the current directory mounted, using a shared image definition pulled from this repo.
+Drops you into a throwaway dev environment with the current directory mounted, using an image/template definition pulled from this repo. Two commands are available:
+
+- **`dev`** — runs each session inside a Docker *Sandbox* (`sbx`). Assets live under [`docker-sandbox/`](docker-sandbox).
+- **`dev-container`** — runs a plain `docker run` container as the host user (via `gosu`), so files created inside don't end up root-owned on the host. Assets live under [`docker-container/`](docker-container).
+
+Both share this repo, the installer, and self-update on each run. Pick `dev` if you have `sbx` installed; `dev-container` needs only Docker.
 
 ## Install
 
@@ -16,7 +21,7 @@ export PATH="$HOME/.dev-sandbox/bin:$PATH"
 
 ## Update
 
-The `dev` command pulls the latest changes automatically on each run — no manual update needed.
+Both commands pull the latest changes automatically on each run — no manual update needed.
 
 ## Uninstall
 
@@ -24,9 +29,9 @@ The `dev` command pulls the latest changes automatically on each run — no manu
 bash ~/.dev-sandbox/uninstall.sh
 ```
 
-## Configuration
+## Configuration (`dev-container`)
 
-Optional mounts are configured in `~/.dev-sandbox/mounts` — one entry per line:
+The `dev-container` method's optional mounts are configured in `~/.dev-sandbox/docker-container/mounts` — one entry per line:
 
 ```
 source:target[:opts]
@@ -38,37 +43,40 @@ source:target[:opts]
 ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
 ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
-~/.dev-sandbox/agents/claude/config:/home/ubuntu/.claude:mkdir
-~/.dev-sandbox/agents/claude/claude.json:/home/ubuntu/.claude.json:json
-~/.dev-sandbox/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
-~/.dev-sandbox/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
-~/.dev-sandbox/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
-~/.dev-sandbox/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/claude/config:/home/ubuntu/.claude:mkdir
+~/.dev-sandbox/docker-container/agents/claude/claude.json:/home/ubuntu/.claude.json:json
+~/.dev-sandbox/docker-container/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
 ```
 
-opts` can be:
+`opts` can be:
 
 - `ro` — mount the path read-only.
 - `mkdir` — create the source as a directory on the host if it's missing.
 - `touch` — create the source as an empty file on the host if it's missing.
 - `json` — like `touch`, but seed the file with `{}` (and re-seed it if it already exists but is empty). Use this for tools like Claude Code that fail to start on an empty file where they expect JSON.
 
-Without `mkdir`/`touch`/`json`, a missing source is skipped with a warning. The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox`, so neither tool needs to be installed on the host and nothing pollutes the host home. Edit this file to add or remove mounts per machine. It is gitignored so it stays local to each machine.
+Without `mkdir`/`touch`/`json`, a missing source is skipped with a warning. The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox/docker-container/agents`, so neither tool needs to be installed on the host and nothing pollutes the host home. Edit this file to add or remove mounts per machine. It is gitignored so it stays local to each machine. (The `dev` / sbx method does not use `mounts`.)
 
 ## Usage
 
 ```bash
 cd /your/project
-dev
+dev              # sbx sandbox
+# or
+dev-container    # docker run container
 ```
 
-To open another shell in the container already running for the current directory:
+To open another shell in the sandbox/container already running for the current directory:
 
 ```bash
-dev --attach   # or: dev -a
+dev --attach              # or: dev -a
+dev-container --attach    # or: dev-container -a
 ```
 
-`--attach` skips the image build and runs a new shell in the existing container (matched by the mounted directory). If several containers are running for the same directory, it lists them and prompts you to choose.
+`--attach` skips the build and runs a new shell in the existing sandbox/container, matched by the mounted directory. If several are running for the same directory, it lists them and prompts you to choose. Any args after `--attach` run as a command instead of a shell (e.g. `dev --attach ls`).
 
 ## Known issues / possible improvements
 - Explicit agent-specific ssh keys (not mounting `id_rsa` and `id_rsa.pub` keypair of the host)

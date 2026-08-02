@@ -24,7 +24,7 @@ init_environment() {
   CWD="$(pwd)"
   PROJECT_NAME="$(basename "$CWD")"
   WORKDIR="/workspace/$PROJECT_NAME"
-  MOUNTS_FILE="$REPO_DIR/mounts"
+  MOUNTS_FILE="$REPO_DIR/docker-container/mounts"
   # Name prefix shared by every container for this project. The random suffix
   # (added at run time) keeps sandboxes in identically named dirs from colliding.
   CONTAINER_PREFIX="dev-${PROJECT_NAME// /_}-"
@@ -108,7 +108,7 @@ build_image() {
   docker build --network=host \
     --build-arg HOST_UID="$(id -u)" \
     --build-arg HOST_GID="$(id -g)" \
-    -t "$IMAGE_NAME" "$REPO_DIR"
+    -t "$IMAGE_NAME" "$REPO_DIR/docker-container"
 }
 
 # Read the optional mounts config into the MOUNTS array as `docker run` flags,

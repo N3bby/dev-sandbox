@@ -8,11 +8,11 @@ YELLOW=$'\033[0;33m'
 RESET=$'\033[0m'
 
 INSTALL_DIR="${HOME}/.dev-sandbox"
-MOUNTS_FILE="${INSTALL_DIR}/mounts"
+MOUNTS_FILE="${INSTALL_DIR}/docker-container/mounts"
 
 make_dev_executable() {
-  echo "  ${BOLD}[1/2]${RESET} Making dev command executable..."
-  chmod +x "${INSTALL_DIR}/bin/dev"
+  echo "  ${BOLD}[1/2]${RESET} Making dev commands executable..."
+  chmod +x "${INSTALL_DIR}/bin/dev" "${INSTALL_DIR}/bin/dev-container"
   echo "        ${GREEN}✅ Done${RESET}"
   echo ""
 }
@@ -21,6 +21,7 @@ make_dev_executable() {
 setup_mounts_config() {
   echo "  ${BOLD}[2/2]${RESET} Setting up mounts config..."
   if [ ! -f "$MOUNTS_FILE" ]; then
+    mkdir -p "$(dirname "$MOUNTS_FILE")"
     cat > "$MOUNTS_FILE" <<'EOF'
 # dev-sandbox mount config — one per line: source:target[:opts]
 # opts (comma-separated): ro = read-only, mkdir = create missing dir,
@@ -29,12 +30,12 @@ setup_mounts_config() {
 ~/.ssh/id_rsa:/home/ubuntu/.ssh/id_rsa:ro
 ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/id_rsa.pub:ro
 ~/.gitconfig:/home/ubuntu/.gitconfig:ro
-~/.dev-sandbox/agents/claude/config:/home/ubuntu/.claude:mkdir
-~/.dev-sandbox/agents/claude/claude.json:/home/ubuntu/.claude.json:json
-~/.dev-sandbox/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
-~/.dev-sandbox/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
-~/.dev-sandbox/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
-~/.dev-sandbox/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/claude/config:/home/ubuntu/.claude:mkdir
+~/.dev-sandbox/docker-container/agents/claude/claude.json:/home/ubuntu/.claude.json:json
+~/.dev-sandbox/docker-container/agents/opencode/config:/home/ubuntu/.config/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/data:/home/ubuntu/.local/share/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/state:/home/ubuntu/.local/state/opencode:mkdir
+~/.dev-sandbox/docker-container/agents/opencode/cache:/home/ubuntu/.cache/opencode:mkdir
 EOF
     echo "        ${GREEN}✅ Created:${RESET} ${CYAN}${MOUNTS_FILE}${RESET}"
   else

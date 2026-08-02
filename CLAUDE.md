@@ -4,46 +4,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A host-installed tool (`dev`) that builds a Docker image from this repo and drops you into a container with the current directory mounted. The container runs as the host user (via `gosu`) so files created inside don't have root ownership on the host.
+A host-installed toolkit that drops you into a throwaway dev environment with the current directory mounted, using an image/template definition pulled from this repo. It ships **two** commands, each backed by its own directory:
 
-Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. The `dev` binary lives at `~/.dev-sandbox/bin/dev` and is added to `PATH` by the user.
+- **`dev`** (docker-sandbox method) — runs each session inside a Docker *Sandbox* (`sbx`). Everything it uses lives under `docker-sandbox/`.
+- **`dev-container`** (docker-container method) — runs a plain `docker run` container as the host user (via `gosu`) so files created inside don't have root ownership on the host. Everything it uses lives under `docker-container/`.
 
-## Key files
+Installed to `~/.dev-sandbox/` by cloning this repo and running `install.sh`. Both binaries live under `~/.dev-sandbox/bin/` and that dir is added to `PATH` by the user.
 
-- `bin/dev` — the CLI entry point. Runs `git pull` on itself, builds the Docker image, reads `mounts`, and starts the container.
-- `Dockerfile` — the container image definition. Ubuntu 24.04 with Zsh, Oh My Zsh, Docker CLI, Claude Code, and asdf.
-- `entrypoint.sh` — runs inside the container. Creates a user/group matching `HOST_UID`/`HOST_GID`, chowns `/home/ubuntu` dirs to that user, grants passwordless sudo, then `gosu`s into the user.
-- `install.sh` — makes `bin/dev` executable and creates a default `mounts` config file at `~/.dev-sandbox/mounts`.
-- `uninstall.sh` — removes `~/.dev-sandbox/` with confirmation.
-- `mounts` — gitignored, machine-local config file (`source:target[:opts]` per line). Missing sources are skipped with a warning, unless flagged `mkdir`/`touch`/`json` (then created on the host first — as a directory, an empty file, or a file seeded with `{}`).
+## Layout
 
-## How `dev` works end-to-end
+```
+bin/dev                      # docker-sandbox entry point (sbx)
+bin/dev-container            # docker-container entry point (docker run)
+docker-sandbox/              # everything the `dev` command uses
+  template/                  #   sbx template image definition
+    Dockerfile
+    dev-sandbox-sbx.tar      #   built template, gitignored (docker image save)
+  kits/                      #   sbx mixin kits (--kit) layered onto the claude agent
+    statusline/
+    claude-dashboard/
+docker-container/            # everything the `dev-container` command uses
+  Dockerfile                 #   container image definition
+  entrypoint.sh              #   runs inside the container as the host user
+  mounts                     #   gitignored, machine-local mount config
+  agents/                    #   gitignored agent state (claude/opencode), persisted between runs
+install.sh                   # shared: chmods both binaries, seeds the default mounts config
+uninstall.sh                 # shared: removes ~/.dev-sandbox with confirmation
+```
 
-1. Self-updates via `git pull` on `~/.dev-sandbox`.
-2. Builds the image tagged `dev-sandbox` from `~/.dev-sandbox/Dockerfile`.
-3. Reads `~/.dev-sandbox/mounts`, expands `~`, skips missing sources (or creates them on the host when flagged `mkdir`/`touch`/`json`).
-4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>` inside the container, the container named `dev-<dirname>` (spaces replaced with `_`), `HOST_UID`/`HOST_GID` env vars, and any configured mounts.
-5. `entrypoint.sh` creates a matching user inside the container and drops into it via `gosu`.
+Shared files (`install.sh`, `uninstall.sh`, `README.md`, this file) stay at the repo root. Both entry scripts stay under `bin/` because that's the directory the user puts on `PATH`; only each method's supporting assets live under its own dir. Each script resolves `REPO_DIR` as the parent of `bin/` and reaches into the appropriate method dir from there.
 
-## Attach mode (`dev --attach` / `dev -a`)
+## The `dev` command (docker-sandbox / sbx)
 
-Short-circuits before self-update, build, and mount resolution, then `docker exec`s a new `gosu "$(id -u)"` shell into the container already running for the current directory. The target is identified by its bind mount (`$CWD` → `$WORKDIR`), not by name — the `dev-<dirname>-<random>` name is only a `docker ps` prefilter, since the random suffix means two same-basename directories can each have their own container. If more than one container matches, it lists them and prompts (default = newest). Extra args after `--attach` are run as the command instead of a shell (e.g. `dev --attach ls`).
+`bin/dev`. End-to-end:
 
-## Container user model
+1. Self-updates via `git pull` on `~/.dev-sandbox`; re-execs (carrying `DEV_SBX_REBUILD=1`) if HEAD moved.
+2. Builds the template image from `docker-sandbox/template/` and `docker image save`s it to `docker-sandbox/template/dev-sandbox-sbx.tar`, then imports it with `sbx template load`. Rebuilds when the pull brought a change, the tar is missing, or the template isn't in `sbx` yet.
+3. Starts a fresh sandbox for the current directory with a unique name (`dev-<slug>-<pid>-<rand>`), so repeated runs in one directory yield independent sandboxes. The claude agent defaults to a pinned model and gets the mixin kits from `docker-sandbox/kits/` layered on via `--kit`. On exit (or Ctrl-C) the sandbox is stopped and removed via a trap.
 
-All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home directory, then chowns its *directories* (not files) to that user so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any configured `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
+`dev -a` / `--attach` short-circuits all of the above and `sbx exec`s a zsh shell into a running sandbox for the current directory, matching on the recorded workspace path (both logical and symlink-resolved). Prompts when several match. Extra args after `--attach` run as the command instead of a shell.
 
-## Adding tools to the image
+## The `dev-container` command (docker-container / docker run)
 
-Add `RUN` steps to `Dockerfile`. The next `dev` invocation will rebuild the image. Tools that modify `PATH` at runtime (nvm, asdf plugins) should be initialized in `.zshrc` or `.bashrc`, not in `ENTRYPOINT`-level scripts.
+`bin/dev-container`. End-to-end:
 
-## The `mounts` file
+1. Self-updates via `git pull` on `~/.dev-sandbox`; re-execs if HEAD moved.
+2. Builds the image tagged `dev-sandbox` from `docker-container/` (build context), passing `HOST_UID`/`HOST_GID` build args so `/home/ubuntu` ownership is baked in.
+3. Reads `docker-container/mounts`, expands `~`, skips missing sources (or creates them on the host when flagged `mkdir`/`touch`/`json`).
+4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>`, the container named `dev-<dirname>-<rand>`, `HOST_UID`/`HOST_GID`/`IS_SANDBOX` env vars, and any configured mounts. When the command is `claude`, injects `--dangerously-skip-permissions`.
+5. `docker-container/entrypoint.sh` creates a user/group matching `HOST_UID`/`HOST_GID`, chowns `/home/ubuntu` *directories* (not files) to that user, grants passwordless sudo, then `gosu`s into the user.
 
-Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated list of `ro` (mount read-only), `mkdir` (create the source as a directory on the host if missing), `touch` (create the source as an empty file on the host if missing, making its parent dirs), and `json` (like `touch`, but seed the file with `{}` — and also re-seed it if it already exists but is empty, since tools like Claude Code choke on an empty file where they expect JSON). `mkdir`/`touch`/`json` mean a missing source is created instead of skipped. Comments (`#`) and blank lines are ignored. Tilde expansion is handled by `bin/dev`. This file is gitignored so it stays local to each machine — `install.sh` creates a default one on first install.
+`dev-container -a` / `--attach` `docker exec`s a new `gosu` shell into a container already running for this directory, identified by its `$CWD` → `$WORKDIR` bind mount (the name prefix is only a prefilter). Prompts when several match. Extra args after `--attach` run as the command instead of a shell.
 
-The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox`, so neither tool needs to be installed/configured on the host and nothing pollutes the host home:
+### Container user model
 
-- `~/.dev-sandbox/agents/claude/config` (`mkdir`) → `~/.claude`, and `~/.dev-sandbox/agents/claude/claude.json` (`json`) → `~/.claude.json`.
-- `~/.dev-sandbox/agents/opencode/config` (`mkdir`) → `~/.config/opencode`, `~/.dev-sandbox/agents/opencode/data` (`mkdir`) → `~/.local/share/opencode`, `~/.dev-sandbox/agents/opencode/state` (`mkdir`) → `~/.local/state/opencode`, and `~/.dev-sandbox/agents/opencode/cache` (`mkdir`) → `~/.cache/opencode`. opencode spreads its files across all four XDG dirs: config holds `opencode.json`, data holds `opencode.db`/auth, **state holds `kv.json` — the TUI-selected theme and other prefs** (so without it a changed theme resets every run), and cache holds `models.json`/downloaded bins (persisted only to avoid re-downloading).
+All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home, then chowns its *directories* (not files) so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
 
-This persists each tool's theme, API keys/auth, and global config between runs. The `~/.dev-sandbox/agents/` tree is gitignored so it doesn't interfere with the self-update `git pull`.
+## Adding tools to the images
+
+Add `RUN` steps to the relevant Dockerfile (`docker-container/Dockerfile` or `docker-sandbox/template/Dockerfile`). The next invocation of the corresponding command rebuilds. Tools that modify `PATH` at runtime (nvm, asdf plugins) should be initialized in `.zshrc`/`.bashrc`, not in `ENTRYPOINT`-level scripts.
+
+## The `mounts` file (docker-container only)
+
+`docker-container/mounts`. Format: one entry per line, `source:target[:opts]`. `opts` is a comma-separated list of `ro` (mount read-only), `mkdir` (create the source as a directory on the host if missing), `touch` (create the source as an empty file on the host if missing, making its parent dirs), and `json` (like `touch`, but seed the file with `{}` — and also re-seed it if it exists but is empty, since tools like Claude Code choke on an empty file where they expect JSON). `mkdir`/`touch`/`json` mean a missing source is created instead of skipped. Comments (`#`) and blank lines are ignored. Tilde expansion is handled by `bin/dev-container`. This file is gitignored so it stays local to each machine — `install.sh` creates a default one on first install.
+
+The default config keeps Claude Code's and opencode's global state self-contained under `~/.dev-sandbox/docker-container/agents`, so neither tool needs to be installed/configured on the host and nothing pollutes the host home:
+
+- `.../agents/claude/config` (`mkdir`) → `~/.claude`, and `.../agents/claude/claude.json` (`json`) → `~/.claude.json`.
+- `.../agents/opencode/config` (`mkdir`) → `~/.config/opencode`, `.../agents/opencode/data` (`mkdir`) → `~/.local/share/opencode`, `.../agents/opencode/state` (`mkdir`) → `~/.local/state/opencode`, and `.../agents/opencode/cache` (`mkdir`) → `~/.cache/opencode`. opencode spreads its files across all four XDG dirs: config holds `opencode.json`, data holds `opencode.db`/auth, **state holds `kv.json` — the TUI-selected theme and other prefs** (so without it a changed theme resets every run), and cache holds `models.json`/downloaded bins (persisted only to avoid re-downloading).
+
+This persists each tool's theme, API keys/auth, and global config between runs. The `docker-container/agents/` tree is gitignored so it doesn't interfere with the self-update `git pull`. It is only mounted for the docker-container method — the `dev` (sbx) command does not use it.
