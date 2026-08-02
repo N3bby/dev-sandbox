@@ -34,6 +34,10 @@ DEFAULT_AGENT="claude"
 # When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
 # starts on an older Sonnet). Passed through the `--` separator to the agent.
 DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
+# Mixin kits (`sbx --kit`) layered onto the claude agent: a custom statusline
+# and the private claude-dashboard plugin. Directory names under $REPO_DIR/
+# sbx-kits; the full paths are resolved in run_sandbox once REPO_DIR is known.
+CLAUDE_KITS=("statusline" "claude-dashboard")
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR,
@@ -272,11 +276,21 @@ run_sandbox() {
     agent_args=(-- --model "$DEFAULT_CLAUDE_MODEL")
   fi
 
+  # Layer the claude mixin kits onto claude sandboxes only. `--kit` is a create-
+  # time flag, which fits: run_sandbox always creates a fresh sandbox. Applied
+  # regardless of forwarded agent args, so it's keyed off the agent alone.
+  local kit_args=() k
+  if [ "${1:-}" = "claude" ]; then
+    for k in "${CLAUDE_KITS[@]}"; do
+      kit_args+=(--kit "$REPO_DIR/sbx-kits/$k")
+    done
+  fi
+
   echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
   # Pass the workspace explicitly so it's mounted and recorded (that recorded
   # path is what `-a` matches on). `|| true` keeps a non-zero agent exit from
   # tripping `set -e` before the cleanup trap runs.
-  sbx run --name "$SANDBOX_NAME" --template "$TEMPLATE_TAG" "$@" "$CWD" "${agent_args[@]}" || true
+  sbx run --name "$SANDBOX_NAME" --template "$TEMPLATE_TAG" "${kit_args[@]}" "$@" "$CWD" "${agent_args[@]}" || true
 }
 
 main() {
