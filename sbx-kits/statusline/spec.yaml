@@ -7,11 +7,6 @@ description: >-
   a context-window usage bar, and 5h/7d quota usage.
 
 commands:
-  install:
-    - command: |
-        command -v jq >/dev/null 2>&1 || (apt-get update && apt-get install -y jq)
-      description: Ensure jq is available (used to merge settings.json at startup)
-
   startup:
     - command:
         - bash
@@ -20,12 +15,13 @@ commands:
           set -eu
           script="/home/agent/.claude/statusline-command.sh"
           settings="/home/agent/.claude/settings.json"
+
+          # static kit files land without the executable bit set
           chmod +x "$script"
-          [ -f "$settings" ] || echo '{}' > "$settings"
+
+          # jq can't edit a file in place, so write to a temp file and swap it in
           tmp="$(mktemp)"
-          jq --arg cmd "bash $script" \
-            '.statusLine = {"type": "command", "command": $cmd}' \
-            "$settings" > "$tmp" && mv "$tmp" "$settings"
-      description: >-
-        Point statusLine at the bundled script. Runs on every start because
-        the sandbox reseeds settings.json after kit files are applied.
+
+          # set statusLine to run the bundled script
+          jq --arg cmd "bash $script" '.statusLine = {"type": "command", "command": $cmd}' "$settings" > "$tmp" && mv "$tmp" "$settings"
+      description: Point statusLine at the bundled script. Runs on every start because the sandbox reseeds settings.json after kit files are applied.
