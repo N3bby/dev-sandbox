@@ -6,37 +6,20 @@ description: >-
   Installs the private claude-dashboard Claude Code plugin from
   github.com/N3bby/claude-dashboard and points it at the dashboard server.
 
-# kit-spec v2 network capability. Replaces the deprecated top-level
-# `network.allowedDomains`, which `sbx kit validate` warns on.
 caps:
   network:
     allow:
       - "github.com:443"
       - "api.github.com:443"
-      # claude-dashboard server (serverUrl). Single-host CIDR — allows all
-      # ports to this IP, since CIDR entries can't carry a :port suffix.
-      - "100.127.103.89/32"
+      - "100.127.103.89/32" # Tailscale CIDR range
 
 commands:
   install:
-    - command: |
-        command -v jq >/dev/null 2>&1 || (apt-get update && apt-get install -y jq)
-      description: Ensure jq is available (used to reassert plugin state at startup)
-
-    - command: |
-        for i in $(seq 1 30); do
-          command -v claude >/dev/null 2>&1 && break
-          sleep 1
-        done
-        claude plugin marketplace add https://github.com/N3bby/claude-dashboard.git
+    - command: claude plugin marketplace add https://github.com/N3bby/claude-dashboard.git
       user: "1000"
-      description: >-
-        Register the claude-dashboard marketplace over HTTPS (the sandbox
-        proxy only auto-authenticates HTTPS GitHub traffic, not SSH)
+      description: Register the claude-dashboard marketplace
 
-    - command: >-
-        claude plugin install claude-dashboard@claude-dashboard
-        --config serverUrl=http://100.127.103.89:4317
+    - command: claude plugin install claude-dashboard@claude-dashboard --config serverUrl=http://100.127.103.89:4317
       user: "1000"
       description: Install and configure the claude-dashboard plugin
 
@@ -47,12 +30,14 @@ commands:
         - |
           set -eu
           settings="/home/agent/.claude/settings.json"
-          [ -f "$settings" ] || echo '{}' > "$settings"
+
+          # jq can't edit a file in place, so write to a temp file and swap it in
           tmp="$(mktemp)"
-          jq '.enabledPlugins["claude-dashboard@claude-dashboard"] = true
-              | .pluginConfigs["claude-dashboard@claude-dashboard"].options.serverUrl
-                  = "http://100.127.103.89:4317"' \
-            "$settings" > "$tmp" && mv "$tmp" "$settings"
+
+          # turn the plugin on
+          jq '.enabledPlugins["claude-dashboard@claude-dashboard"] = true' "$settings" > "$tmp" && mv "$tmp" "$settings"
+
+          # tell it which server to talk to
+          jq '.pluginConfigs["claude-dashboard@claude-dashboard"].options.serverUrl = "http://100.127.103.89:4317"' "$settings" > "$tmp" && mv "$tmp" "$settings"
       description: >-
-        Reassert the plugin stays enabled and configured, since settings.json
-        is reseeded on every start.
+        Reassert the plugin stays enabled and configured, since settings.json is reseeded on every start.
