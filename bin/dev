@@ -77,11 +77,10 @@ init_environment() {
   SANDBOX_PREFIX="dev-${slug}-"
 }
 
-# Map the requested agent to a build variant and set the globals the build/run
-# steps key off. Each variant pairs a base image (which bundles that agent's CLI)
-# with its own template tag and saved tar, so the claude and codex images are
-# built and cached independently. shell/claude share the claude-code image; codex
-# uses its own. Sets VARIANT, BASE_IMAGE, TEMPLATE_TAG and TEMPLATE_TAR.
+# Map the requested agent to a build variant, each with its own base image,
+# template tag and saved tar so they build/cache independently. shell/claude
+# share the claude-code image; codex uses its own. Sets VARIANT, BASE_IMAGE,
+# TEMPLATE_TAG and TEMPLATE_TAR.
 resolve_variant() {
   case "${1:-}" in
     codex)
@@ -312,11 +311,8 @@ run_sandbox() {
     agent_args=(-- -c "exec zsh")
   fi
 
-  # Layer the mixin kits onto the claude-code variant only. `--kit` is a
-  # create-time flag, which fits: run_sandbox always creates a fresh sandbox.
-  # Applied for both shell and claude (they share the claude-code image) so a
-  # shell session that later launches `claude` is already configured, but skipped
-  # for the codex variant, whose image has no Claude settings for them to write.
+  # Kits configure Claude Code's settings.json, so apply them to the claude-code
+  # variant (shell and claude) but not codex.
   local kit_args=() k
   if [ "$VARIANT" = "claude-code" ]; then
     for k in "${KITS[@]}"; do

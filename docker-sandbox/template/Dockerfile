@@ -1,13 +1,14 @@
-# Base image is chosen per agent variant by `bin/dev` (--build-arg BASE_IMAGE=…):
-# the claude-code image for the shell/claude agents, the codex image for codex.
-# Both bundle their agent CLI and share the same `agent` user + /home/agent, so
-# everything below applies unchanged regardless of which base is used.
+# Base image set per agent variant by bin/dev; defaults to claude-code.
 ARG BASE_IMAGE=docker/sandbox-templates:claude-code-docker
 FROM ${BASE_IMAGE}
+
+# Update whichever agent CLI the base image ships (before the purge removes npm).
+RUN if command -v codex  >/dev/null 2>&1; then npm install -g @openai/codex@latest; fi
+RUN if command -v claude >/dev/null 2>&1; then claude update; fi
+
 USER root
 
 # Remove pre-installed runtimes from image
-# Not uninstalling node.js or npm because claude is installed through that global install
 RUN apt-get purge -y python3 python3-pip openjdk-* nodejs npm
 
 # Load apt-get lists
@@ -23,7 +24,7 @@ USER agent
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 RUN echo 'PROMPT="[sandbox] $PROMPT"' >> /home/agent/.zshrc
 
-# Install asdf (the codex base image lacks ~/.local/bin, so create it first)
+# Install asdf (mkdir since the codex base image lacks ~/.local/bin)
 USER agent
 RUN mkdir -p /home/agent/.local/bin && \
     curl -L https://github.com/asdf-vm/asdf/releases/download/v0.20.0/asdf-v0.20.0-linux-amd64.tar.gz | tar -xz -C /home/agent/.local/bin
@@ -60,7 +61,7 @@ RUN asdf plugin add python
 RUN asdf install python 3.14.6
 RUN asdf set -u python 3.14.6
 
-# Enable fullscreen mode for claude code by default 
+# Enable fullscreen mode for claude code by default
 ENV CLAUDE_CODE_NO_FLICKER=1
 
 # Change user back to agent
