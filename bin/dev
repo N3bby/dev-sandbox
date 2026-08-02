@@ -30,14 +30,19 @@ RESET=$'\033[0m'
 TEMPLATE_TAG="dev-sandbox-sbx:claude-code"
 TEMPLATE_REPO="dev-sandbox-sbx"
 # Which agent `sbx run` launches when no override is given on the command line.
-DEFAULT_AGENT="claude"
+# Defaults to a plain shell; run `dev claude` to launch the Claude Code agent
+# (which additionally pins the model below and layers on the mixin kits).
+DEFAULT_AGENT="shell"
 # When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
 # starts on an older Sonnet). Passed through the `--` separator to the agent.
 DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
-# Mixin kits (`sbx --kit`) layered onto the claude agent: a custom statusline
-# and the private claude-dashboard plugin. Directory names under $REPO_DIR/
-# docker-sandbox/kits; the full paths are resolved in run_sandbox once REPO_DIR is known.
-CLAUDE_KITS=("statusline" "claude-dashboard")
+# Mixin kits (`sbx --kit`) layered onto every sandbox regardless of agent: a
+# custom statusline and the private claude-dashboard plugin. They configure
+# Claude Code's settings.json, so applying them even under the shell agent means
+# running `claude` from within the shell is already set up. Directory names under
+# $REPO_DIR/docker-sandbox/kits; full paths are resolved in run_sandbox once
+# REPO_DIR is known.
+KITS=("statusline" "claude-dashboard")
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR,
@@ -265,26 +270,27 @@ run_sandbox() {
   SANDBOX_NAME="${SANDBOX_PREFIX}$(printf '%d-%04x' "$$" "$RANDOM")"
   trap cleanup_sandbox EXIT INT TERM
 
-  # Default the claude agent to Sonnet 5, unless the caller is already forwarding
-  # their own agent arguments (a `--` in the args), in which case leave the model
-  # choice to them. Everything after `--` is handed straight to the agent.
+  # Default the claude agent to Sonnet 5, and the shell agent to zsh (matching
+  # `--attach`'s default below), unless the caller is already forwarding their
+  # own agent arguments (a `--` in the args), in which case leave it to them.
+  # Everything after `--` is handed straight to the agent.
   local agent_args=() has_dashdash=0 a
   for a in "$@"; do
     [ "$a" = "--" ] && has_dashdash=1 && break
   done
   if [ "${1:-}" = "claude" ] && [ "$has_dashdash" -eq 0 ]; then
     agent_args=(-- --model "$DEFAULT_CLAUDE_MODEL")
+  elif [ "${1:-}" = "shell" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(-- -c "exec zsh")
   fi
 
-  # Layer the claude mixin kits onto claude sandboxes only. `--kit` is a create-
-  # time flag, which fits: run_sandbox always creates a fresh sandbox. Applied
-  # regardless of forwarded agent args, so it's keyed off the agent alone.
+  # Layer the mixin kits onto every sandbox. `--kit` is a create-time flag, which
+  # fits: run_sandbox always creates a fresh sandbox. Applied regardless of agent
+  # so a shell session that later launches `claude` is already configured.
   local kit_args=() k
-  if [ "${1:-}" = "claude" ]; then
-    for k in "${CLAUDE_KITS[@]}"; do
-      kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
-    done
-  fi
+  for k in "${KITS[@]}"; do
+    kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
+  done
 
   echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
   # Pass the workspace explicitly so it's mounted and recorded (that recorded
