@@ -78,11 +78,12 @@ dev codex        # Codex
 
 `claude` and `shell` share one template image; `codex` uses its own (built from
 the codex base image and cached separately, so the first `dev codex` builds it).
-Each image also gets its own mixin kits: Claude receives its custom statusline
-and dashboard configuration, while Codex receives configuration defaults, the
-dashboard plugin, and a native TUI statusline showing its model and reasoning
-effort, current directory, tokens used, context-window size/usage, and
-5-hour/weekly limits.
+Each image also gets its own mixin configuration: Claude receives its custom
+statusline and dashboard kits, while one Codex kit provides configuration
+defaults, the dashboard plugin, and a native TUI statusline showing its model
+and reasoning effort, current directory, tokens used, context-window size/usage,
+and 5-hour/weekly limits. The default Codex launch also trusts the dashboard
+plugin's pre-vetted hooks, avoiding a hook prompt in every disposable sandbox.
 
 To open another shell in the sandbox/container already running for the current directory:
 

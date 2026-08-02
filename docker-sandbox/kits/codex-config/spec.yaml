@@ -1,22 +1,56 @@
 schemaVersion: "1"
 kind: mixin
 name: codex-config
-displayName: Codex configuration
+displayName: Codex configuration and dashboard
 description: >-
-  Applies opinionated Codex CLI defaults without replacing the authentication
-  and model-provider configuration supplied by the sandbox image.
+  Configures the Codex CLI and native statusline, installs the dashboard
+  plugin, and points it at the dashboard server.
+
+caps:
+  network:
+    allow:
+      - "github.com:443"
+      - "api.github.com:443"
+      - "100.127.103.89/32" # Dashboard server on Tailscale
+
+environment:
+  variables:
+    CODEX_STATUS_SERVER_URL: "http://100.127.103.89:4317"
 
 commands:
-  startup:
-    - command:
-        - bash
-        - -c
-        - |
-          set -eu
-          config="/home/agent/.codex/config.toml"
-          mkdir -p "$(dirname "$config")"
-          touch "$config"
-
-          tomlq -T --in-place '.tui.notifications = false' "$config"
+  install:
+    - command: >-
+        HOME=/home/agent
+        /usr/bin/zsh -lc
+        'codex plugin marketplace add N3bby/agent-session-reporter'
       user: "1000"
-      description: Disable terminal notifications that can raise or focus the terminal when a turn completes.
+      description: Register the agent-session-reporter marketplace.
+
+    - command: >-
+        HOME=/home/agent
+        /usr/bin/zsh -lc
+        'codex plugin add codex-dashboard@personal'
+      user: "1000"
+      description: Install the codex-dashboard plugin.
+
+    - command: |
+        set -eu
+        export HOME=/home/agent
+        export PATH="/home/agent/.asdf/shims:$PATH"
+        config="$HOME/.codex/config.toml"
+        mkdir -p "$(dirname "$config")"
+        touch "$config"
+
+        tomlq -T --in-place '
+          .tui.notifications = false |
+          .tui.status_line = [
+            "model-with-reasoning",
+            "current-dir",
+            "context-window-size",
+            "context-used",
+            "five-hour-limit",
+            "weekly-limit"
+          ]
+        ' "$config"
+      user: "1000"
+      description: Configure Codex defaults and the native TUI footer after installing the plugin.

@@ -41,7 +41,7 @@ DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
 # for Codex-specific defaults. Directory names live under
 # $REPO_DIR/docker-sandbox/kits; run_sandbox resolves them to full paths.
 CLAUDE_CODE_KITS=("claude-statusline" "claude-dashboard")
-CODEX_KITS=("codex-config" "codex-statusline" "codex-dashboard")
+CODEX_KITS=("codex-config")
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR, CWD,
@@ -295,9 +295,10 @@ run_sandbox() {
   SANDBOX_NAME="${SANDBOX_PREFIX}$(printf '%d-%04x' "$$" "$RANDOM")"
   trap cleanup_sandbox EXIT INT TERM
 
-  # Default the claude agent to Sonnet 5, and the shell agent to zsh (matching
-  # `--attach`'s default below), unless the caller is already forwarding their
-  # own agent arguments (a `--` in the args), in which case leave it to them.
+  # Default the claude agent to Sonnet 5, trust the pre-vetted dashboard hooks
+  # for Codex, and default the shell agent to zsh
+  # (matching `--attach` below). If the caller is already forwarding their own
+  # agent arguments (a `--` in the args), leave the arguments entirely to them.
   # Everything after `--` is handed straight to the agent.
   local agent_args=() has_dashdash=0 a
   for a in "$@"; do
@@ -305,6 +306,11 @@ run_sandbox() {
   done
   if [ "${1:-}" = "claude" ] && [ "$has_dashdash" -eq 0 ]; then
     agent_args=(-- --model "$DEFAULT_CLAUDE_MODEL")
+  elif [ "${1:-}" = "codex" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(
+      --
+      --dangerously-bypass-hook-trust
+    )
   elif [ "${1:-}" = "shell" ] && [ "$has_dashdash" -eq 0 ]; then
     agent_args=(-- -c "exec zsh")
   fi
