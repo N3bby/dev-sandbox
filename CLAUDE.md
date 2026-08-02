@@ -25,6 +25,7 @@ docker-sandbox/              # everything the `dev` command uses
     claude-dashboard/
     codex-config/            #   Codex CLI defaults layered onto the codex variant
     codex-statusline/        #   Native Codex TUI footer configuration
+    codex-dashboard/         #   Codex dashboard plugin and server configuration
 docker-container/            # everything the `dev-container` command uses
   Dockerfile                 #   container image definition
   entrypoint.sh              #   runs inside the container as the host user
@@ -42,7 +43,7 @@ Shared files (`install.sh`, `uninstall.sh`, `README.md`, this file) stay at the 
 
 1. Self-updates via `git pull` on `~/.dev-sandbox`; re-execs (carrying `DEV_SBX_REBUILD=1`) if HEAD moved.
 2. Builds the template image *for the requested agent's variant* from `docker-sandbox/template/` and `docker image save`s it to `docker-sandbox/template/dev-sandbox-sbx-<variant>.tar`, then imports it with `sbx template load`. The one `Dockerfile` is parameterized by a `BASE_IMAGE` build-arg: the `claude-code` variant (used by the `shell` and `claude` agents) builds from the claude-code base image, the `codex` variant (used by `codex`) from the codex base image. Each variant is a separate tag (`dev-sandbox-sbx:<variant>`) with its own tar, built/cached independently, so only the variant needed for this run is built. Rebuilds when the pull brought a change, that variant's tar is missing, or that variant isn't in `sbx` yet.
-3. Starts a fresh sandbox for the current directory with a unique name (`dev-<slug>-<pid>-<rand>`), so repeated runs in one directory yield independent sandboxes. Mixin kits from `docker-sandbox/kits/` are selected per image variant and layered on via `--kit`: `shell` and `claude` get the Claude Code statusline and dashboard kits, while `codex` gets its configuration and native TUI statusline kits. The default agent is a plain `shell`; running `dev claude` launches the Claude Code agent, which additionally pins the model to a default; `dev codex` launches the Codex agent. On exit (or Ctrl-C) the sandbox is stopped and removed via a trap.
+3. Starts a fresh sandbox for the current directory with a unique name (`dev-<slug>-<pid>-<rand>`), so repeated runs in one directory yield independent sandboxes. Mixin kits from `docker-sandbox/kits/` are selected per image variant and layered on via `--kit`: `shell` and `claude` get the Claude Code statusline and dashboard kits, while `codex` gets its configuration, native TUI statusline, and dashboard plugin kits. The default agent is a plain `shell`; running `dev claude` launches the Claude Code agent, which additionally pins the model to a default; `dev codex` launches the Codex agent. On exit (or Ctrl-C) the sandbox is stopped and removed via a trap.
 
 `dev -a` / `--attach` short-circuits all of the above and `sbx exec`s a zsh shell into a running sandbox for the current directory, matching on the recorded workspace path (both logical and symlink-resolved). Prompts when several match. Extra args after `--attach` run as the command instead of a shell.
 

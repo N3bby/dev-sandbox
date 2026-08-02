@@ -1,0 +1,36 @@
+schemaVersion: "1"
+kind: mixin
+name: codex-dashboard
+displayName: Codex Dashboard plugin
+description: >-
+  Installs the codex-dashboard plugin from the agent-session-reporter
+  marketplace.
+
+caps:
+  network:
+    allow:
+      - "github.com:443"
+      - "api.github.com:443"
+      - "100.127.103.89/32" # Dashboard server on Tailscale
+
+environment:
+  variables:
+    CODEX_STATUS_SERVER_URL: "http://100.127.103.89:4317"
+
+commands:
+  install:
+    - command: >-
+        HOME=/home/agent
+        /usr/bin/zsh -lc
+        'codex plugin marketplace add N3bby/agent-session-reporter'
+        >/home/agent/codex-dashboard-marketplace.log 2>&1 || true
+      user: "1000"
+      description: Register the agent-session-reporter marketplace and preserve any error.
+
+    - command: >-
+        HOME=/home/agent
+        /usr/bin/zsh -lc
+        'codex plugin add codex-dashboard@personal'
+        >/home/agent/codex-dashboard-plugin.log 2>&1 || true
+      user: "1000"
+      description: Install the codex-dashboard plugin and preserve any error.
