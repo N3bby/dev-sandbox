@@ -40,8 +40,8 @@ DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
 # share the claude-code image and its Claude settings; Codex has a separate kit
 # for Codex-specific defaults. Directory names live under
 # $REPO_DIR/docker-sandbox/kits; run_sandbox resolves them to full paths.
-CLAUDE_CODE_KITS=("statusline" "claude-dashboard")
-CODEX_KITS=("codex-config")
+CLAUDE_CODE_KITS=("claude-statusline" "claude-dashboard")
+CODEX_KITS=("codex-config" "codex-statusline")
 
 # Resolve this script's real location (following symlinks) and derive the paths
 # and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR, CWD,

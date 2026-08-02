@@ -60,6 +60,8 @@ USER agent
 RUN asdf plugin add python
 RUN asdf install python 3.14.6
 RUN asdf set -u python 3.14.6
+RUN asdf exec python -m pip install --no-cache-dir yq && \
+    asdf reshim python 3.14.6
 
 # Enable fullscreen mode for claude code by default
 ENV CLAUDE_CODE_NO_FLICKER=1

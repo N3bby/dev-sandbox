@@ -78,9 +78,10 @@ dev codex        # Codex
 
 `claude` and `shell` share one template image; `codex` uses its own (built from
 the codex base image and cached separately, so the first `dev codex` builds it).
-Each image also gets its own mixin kits: Claude receives the statusline and
-dashboard configuration, while Codex receives defaults from
-`docker-sandbox/kits/codex-config/` (including disabled terminal notifications).
+Each image also gets its own mixin kits: Claude receives its custom statusline
+and dashboard configuration, while Codex receives configuration defaults and a
+native TUI statusline showing its model and reasoning effort, current directory,
+tokens used, context-window size/usage, and 5-hour/weekly limits.
 
 To open another shell in the sandbox/container already running for the current directory:
 

@@ -1,0 +1,32 @@
+schemaVersion: "1"
+kind: mixin
+name: codex-statusline
+displayName: Codex Statusline
+description: >-
+  Configures the native Codex TUI footer with information comparable to the
+  Claude Code statusline: model and reasoning effort, current directory,
+  context-window size/usage and 5-hour/weekly quota usage.
+
+commands:
+  startup:
+    - command:
+        - bash
+        - -c
+        - |
+          set -eu
+          config="/home/agent/.codex/config.toml"
+          mkdir -p "$(dirname "$config")"
+          touch "$config"
+
+          tomlq -T --in-place '
+            .tui.status_line = [
+              "model-with-reasoning",
+              "current-dir",
+              "context-window-size",
+              "context-used",
+              "five-hour-limit",
+              "weekly-limit"
+            ]
+          ' "$config"
+      user: "1000"
+      description: Configure the native Codex TUI footer status line.

@@ -17,42 +17,6 @@ commands:
           mkdir -p "$(dirname "$config")"
           touch "$config"
 
-          # Replace an existing tui.notifications value, or add it to the
-          # existing [tui] table. Append a new table when none exists.
-          tmp="$(mktemp "$(dirname "$config")/.config.toml.XXXXXX")"
-          awk '
-            BEGIN { in_tui = 0; saw_tui = 0; set_notifications = 0 }
-            /^\[tui\][[:space:]]*$/ {
-              in_tui = 1
-              saw_tui = 1
-              print
-              next
-            }
-            /^\[/ {
-              if (in_tui && !set_notifications) {
-                print "notifications = false"
-                set_notifications = 1
-              }
-              in_tui = 0
-            }
-            in_tui && /^[[:space:]]*notifications[[:space:]]*=/ {
-              if (!set_notifications) {
-                print "notifications = false"
-                set_notifications = 1
-              }
-              next
-            }
-            { print }
-            END {
-              if (!saw_tui) {
-                print ""
-                print "[tui]"
-                print "notifications = false"
-              } else if (in_tui && !set_notifications) {
-                print "notifications = false"
-              }
-            }
-          ' "$config" > "$tmp"
-          mv "$tmp" "$config"
+          tomlq -T --in-place '.tui.notifications = false' "$config"
       user: "1000"
       description: Disable terminal notifications that can raise or focus the terminal when a turn completes.

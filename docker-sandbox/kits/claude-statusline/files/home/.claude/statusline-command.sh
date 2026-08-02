@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Code statusline: model, cwd, context usage, and quota usage.
+# Claude Code statusline: model, directory, context usage, and quota usage.
 
 # --- Colors (dimmed, safe on dark/light terminals) ---
 DIM='\033[2m'

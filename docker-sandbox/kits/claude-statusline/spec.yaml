@@ -1,7 +1,7 @@
 schemaVersion: "1"
 kind: mixin
-name: statusline
-displayName: Custom Statusline
+name: claude-statusline
+displayName: Claude Statusline
 description: >-
   Custom Claude Code statusline: model + effort level, current directory,
   a context-window usage bar, and 5h/7d quota usage.
