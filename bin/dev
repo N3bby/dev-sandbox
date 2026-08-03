@@ -188,14 +188,16 @@ run_container() {
 # Every dev container is a throwaway sandbox, so agents skip their trust prompts:
 # `dev claude` injects --dangerously-skip-permissions (paired with IS_SANDBOX=1 so
 # it's honoured even when HOST_UID=0, i.e. claude as root), and `dev codex` injects
-# --dangerously-bypass-hook-trust so its pre-vetted plugin hooks run unprompted.
-# Anything else (including a bare shell) passes through untouched.
+# --dangerously-bypass-hook-trust so its pre-vetted plugin hooks run unprompted plus
+# --dangerously-bypass-approvals-and-sandbox so it runs commands without approval
+# prompts (the container is already the sandbox). Anything else (including a bare
+# shell) passes through untouched.
 enable_agent_bypass() {
   CMD=("$@")
   if [[ "${CMD[0]:-}" == "claude" ]]; then
     CMD=(claude --dangerously-skip-permissions "${CMD[@]:1}")
   elif [[ "${CMD[0]:-}" == "codex" ]]; then
-    CMD=(codex --dangerously-bypass-hook-trust "${CMD[@]:1}")
+    CMD=(codex --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox "${CMD[@]:1}")
   fi
 }
 
