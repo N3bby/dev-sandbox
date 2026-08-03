@@ -92,8 +92,19 @@ RUN asdf install nodejs 26.5.0
 RUN asdf set -u nodejs 26.5.0
 
 # Install Java
-# RUN asdf plugin add java
-# RUN asdf install java temurin-25.0.3+9.0.LTS
+RUN asdf plugin add java
+RUN asdf install java temurin-25.0.3+9.0.LTS
+
+# Install codex. Its runtime (the standalone binaries the ~/.local/bin/codex
+# symlink points into) normally lives under ~/.codex/packages, the same dir it
+# uses for config.toml/auth.json. Since docker-container/mounts bind-mounts a
+# persisted (initially empty) host dir over ~/.codex, that would shadow the
+# runtime and dangle the symlink. Relocate the runtime to ~/.codex-runtime via
+# CODEX_HOME (set on the `bash` side of the pipe, not `curl`) so ~/.codex holds
+# only config/auth — which is exactly what we want to persist. No CODEX_HOME is
+# exported into any shell profile, so at runtime codex still reads/writes the
+# default ~/.codex.
+RUN curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_HOME=/home/ubuntu/.codex-runtime bash
 
 # Back to root so the entrypoint can write sudoers and manage the docker-socket
 # group before dropping to the user via gosu.
