@@ -1,0 +1,358 @@
+#!/bin/bash
+#
+# dev-sbx — like `dev`, but runs each session inside a Docker *Sandbox* (`sbx`)
+# instead of a plain `docker run` container.
+#
+# Flow (see requirements.md):
+#   1. Pull this repo; note whether HEAD moved.
+#   2. Build the template (docker build + `docker image save` to a tar) when the
+#      pull brought a change OR the template hasn't been built yet.
+#   3. When a (re)build happened, import the tar into sbx (`sbx template load`).
+#   4. Start a fresh sandbox for the current directory with a unique name, so
+#      running this repeatedly in one directory yields independent sandboxes.
+#      When the interactive `sbx run` exits, the sandbox is stopped + removed.
+#
+# `dev-sbx -a` / `--attach` skips all of the above and drops a zsh shell into a
+# running sandbox for the current directory (prompting when several match).
+#
+# This lives alongside the original `dev` script and shares none of its state.
+set -e
+
+GREEN=$'\033[0;32m'
+CYAN=$'\033[0;36m'
+YELLOW=$'\033[0;33m'
+RED=$'\033[0;31m'
+RESET=$'\033[0m'
+
+# Docker image repo for our templates. Each agent variant (claude-code, codex)
+# is a tag under this repo with its own saved tar, built from the one Dockerfile
+# but a different base image and loaded into sbx independently. resolve_variant
+# sets VARIANT, BASE_IMAGE, TEMPLATE_TAG and TEMPLATE_TAR for the requested agent.
+TEMPLATE_REPO="dev-sandbox-sbx"
+# Which agent `sbx run` launches when no override is given on the command line.
+# Defaults to a plain shell; run `dev claude` to launch the Claude Code agent
+# (which additionally pins the model below and layers on the mixin kits).
+DEFAULT_AGENT="shell"
+# When launching the claude agent, default Claude Code to Sonnet 5 (it otherwise
+# starts on an older Sonnet). Passed through the `--` separator to the agent.
+DEFAULT_CLAUDE_MODEL="claude-sonnet-5"
+# Mixin kits (`sbx --kit`) layered onto each image variant. Shell and Claude
+# share the claude-code image and its Claude settings; Codex has a separate kit
+# for Codex-specific defaults. Directory names live under
+# $REPO_DIR/docker-sandbox/kits; run_sandbox resolves them to full paths.
+CLAUDE_CODE_KITS=("claude-statusline" "claude-dashboard")
+CODEX_KITS=("codex-config")
+
+# Resolve this script's real location (following symlinks) and derive the paths
+# and names the rest of the script relies on. Sets REPO_DIR, TEMPLATE_DIR, CWD,
+# CWD_REAL, PROJECT_NAME and SANDBOX_PREFIX.
+init_environment() {
+  # readlink -f is GNU-only (absent on macOS), so walk the symlink chain by hand.
+  local script="$0" dir
+  while [ -L "$script" ]; do
+    dir="$(cd "$(dirname "$script")" && pwd)"
+    script="$(readlink "$script")"
+    case "$script" in /*) ;; *) script="$dir/$script" ;; esac
+  done
+
+  REPO_DIR="$(cd "$(dirname "$script")/.." && pwd)"
+  TEMPLATE_DIR="$REPO_DIR/docker-sandbox/template"
+
+  # Two spellings of the current directory: the logical path (what the user sees
+  # and what sbx is handed) and the physical, symlink-resolved path. A sandbox's
+  # recorded workspace may be either, so `-a` matches against both.
+  CWD="$(pwd)"
+  CWD_REAL="$(pwd -P)"
+  PROJECT_NAME="$(basename "$CWD")"
+  # Sandbox names must be a stable slug over a safe charset. sbx forbids
+  # underscores outright, so map every char outside [A-Za-z0-9-] to '-',
+  # collapse runs of '-', and trim leading/trailing '-' (e.g. a dotfile dir
+  # like ".dev-sandbox" would otherwise start with a stray separator).
+  local slug
+  slug="$(printf '%s' "$PROJECT_NAME" | tr -c 'A-Za-z0-9-' '-' | tr -s '-')"
+  slug="${slug#-}"
+  slug="${slug%-}"
+  SANDBOX_PREFIX="dev-${slug}-"
+}
+
+# Map the requested agent to a build variant, each with its own base image,
+# template tag and saved tar so they build/cache independently. shell/claude
+# share the claude-code image; codex uses its own. Sets VARIANT, BASE_IMAGE,
+# TEMPLATE_TAG and TEMPLATE_TAR.
+resolve_variant() {
+  case "${1:-}" in
+    codex)
+      VARIANT="codex"
+      BASE_IMAGE="docker/sandbox-templates:codex-docker"
+      ;;
+    *)
+      VARIANT="claude-code"
+      BASE_IMAGE="docker/sandbox-templates:claude-code-docker"
+      ;;
+  esac
+  TEMPLATE_TAG="${TEMPLATE_REPO}:${VARIANT}"
+  TEMPLATE_TAR="${TEMPLATE_DIR}/${TEMPLATE_REPO}-${VARIANT}.tar"
+}
+
+# Abort early with a clear message if the tools we need aren't on PATH.
+require_tools() {
+  local missing=0 t
+  for t in "$@"; do
+    if ! command -v "$t" >/dev/null 2>&1; then
+      echo "${RED}Error: '$t' is not installed or not on PATH.${RESET}" >&2
+      missing=1
+    fi
+  done
+  [ "$missing" -eq 0 ] || exit 1
+}
+
+# Print "name<TAB>status" for every sandbox whose recorded workspace list
+# contains this directory. Reads `sbx ls --json`, tolerating the known bug where
+# daemon start-up lines are printed before the JSON (docker/sbx-releases#201) by
+# discarding everything up to the first '{'. Prefers python3, falls back to jq.
+sandboxes_for_cwd() {
+  local raw
+  raw="$(sbx ls --json 2>/dev/null || true)"
+  [ -n "$raw" ] || return 0
+
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$raw" | python3 -c '
+import sys, json
+raw = sys.stdin.read()
+i = raw.find("{")
+if i < 0:
+    sys.exit(0)
+try:
+    data = json.loads(raw[i:])
+except ValueError:
+    sys.exit(0)
+targets = set(sys.argv[1:])
+for s in data.get("sandboxes", []) or []:
+    ws = s.get("workspaces") or []
+    if any(w in targets for w in ws):
+        print("%s\t%s" % (s.get("name", ""), s.get("status", "")))
+' "$CWD" "$CWD_REAL"
+  elif command -v jq >/dev/null 2>&1; then
+    # Strip any pre-JSON noise, then filter. The `?` guards missing keys.
+    printf '%s' "$raw" | sed -n '/{/,$p' | jq -r \
+      --arg a "$CWD" --arg b "$CWD_REAL" '
+        .sandboxes[]?
+        | select(([.workspaces[]?] | any(. == $a or . == $b)))
+        | "\(.name)\t\(.status)"'
+  else
+    echo "${RED}Error: need python3 or jq to parse the sandbox list for --attach.${RESET}" >&2
+    return 1
+  fi
+}
+
+# Attach mode: find a running sandbox for this directory and exec into it. Any
+# args after -a/--attach are run as the command instead of a shell. Execs on
+# success (never returns); exits non-zero when nothing matches.
+attach_to_sandbox() {
+  require_tools sbx
+
+  local running=() name status
+  while IFS=$'\t' read -r name status; do
+    [ -n "$name" ] || continue
+    # Only running sandboxes can be exec'd into.
+    case "$status" in
+      running|Running|RUNNING) running+=("$name") ;;
+    esac
+  done < <(sandboxes_for_cwd)
+
+  if [ "${#running[@]}" -eq 0 ]; then
+    echo "${YELLOW}No running sandbox found for ${CWD}.${RESET}" >&2
+    echo "Start one with: ${CYAN}dev-sbx${RESET}" >&2
+    exit 1
+  fi
+
+  local target="${running[0]}"
+  [ "${#running[@]}" -gt 1 ] && target="$(choose_sandbox "${running[@]}")"
+
+  # Default to a zsh login shell; allow `dev-sbx -a <cmd...>` to override.
+  if [ "$#" -eq 0 ]; then
+    set -- zsh
+  fi
+  echo "Attaching to ${CYAN}${target}${RESET}..."
+  exec sbx exec -it "$target" "$@"
+}
+
+# Prompt the user to pick one of several matching sandboxes; echo the choice.
+# Prompts go to stderr so only the chosen name lands on stdout.
+choose_sandbox() {
+  local matches=("$@") choice i
+  {
+    echo "Multiple running sandboxes match this directory:"
+    for i in "${!matches[@]}"; do
+      printf "  %d) %s\n" "$((i + 1))" "${matches[$i]}"
+    done
+    printf "Attach to which? [1-%d] (default 1): " "${#matches[@]}"
+  } >&2
+  read -r choice
+  [ -z "$choice" ] && choice=1
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#matches[@]}" ]; then
+    echo "${YELLOW}Invalid selection.${RESET}" >&2
+    exit 1
+  fi
+  echo "${matches[$((choice - 1))]}"
+}
+
+# Pull the latest version of this repo. On a new commit, re-exec the (now
+# updated) script so its own logic is current, carrying a flag that forces the
+# rebuild step. Best-effort: an offline/failed pull never blocks the run.
+self_update() {
+  echo "Checking for updates..."
+  if [ ! -d "$REPO_DIR/.git" ]; then
+    return
+  fi
+  local old_rev
+  old_rev="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo none)"
+  if GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull --quiet; then
+    if [ "$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo none)" != "$old_rev" ]; then
+      echo "${GREEN}Updated — restarting...${RESET}"
+      # Survive the re-exec so the fresh process knows a rebuild is due, even
+      # though its own `git pull` will now report no change.
+      export DEV_SBX_REBUILD=1
+      exec "$0" "$@"
+    fi
+  else
+    echo "${YELLOW}Update check failed — continuing with current version.${RESET}" >&2
+  fi
+}
+
+# Is this run's variant already imported into sbx's image store? Match a line
+# mentioning both our repo and the variant, so the two variants are tracked
+# independently whether `sbx template ls` prints "repo:tag" or separate columns.
+template_in_sbx() {
+  sbx template ls 2>/dev/null | grep -F "$TEMPLATE_REPO" | grep -qF "$VARIANT"
+}
+
+# Build the template image and, when a build happened, import it into sbx.
+#
+# Build when: the pull brought a change (DEV_SBX_REBUILD), the saved tar is
+# missing, or the template isn't in sbx yet ("hasn't been built yet"). Import
+# only after an actual (re)build — matching requirements steps 2 and 3.
+build_and_import_template() {
+  require_tools docker sbx
+
+  local need_build=0
+  if [ "${DEV_SBX_REBUILD:-0}" = "1" ]; then
+    need_build=1
+    # An update may have changed the shared Dockerfile, so every variant's saved
+    # tar is now potentially stale. Drop them all: the one we're about to build is
+    # rebuilt now, the others rebuild the next time their agent is launched.
+    rm -f "$TEMPLATE_DIR/$TEMPLATE_REPO"-*.tar
+  elif [ ! -f "$TEMPLATE_TAR" ]; then
+    echo "${YELLOW}No saved template found — building.${RESET}"
+    need_build=1
+  elif ! template_in_sbx; then
+    echo "${YELLOW}Template not present in sbx — building.${RESET}"
+    need_build=1
+  fi
+
+  if [ "$need_build" -ne 1 ]; then
+    echo "Template up to date."
+    return
+  fi
+
+  echo "Building template image ${CYAN}${TEMPLATE_TAG}${RESET}..."
+  # --network=host uses the host DNS resolver instead of Docker's bridge one,
+  # which refuses lookups on some machines (VPNs, split-DNS, systemd-resolved).
+  # --build-arg picks the base image that bundles this variant's agent CLI.
+  docker build --network=host --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+    -t "$TEMPLATE_TAG" "$TEMPLATE_DIR"
+
+  echo "Saving template to ${CYAN}${TEMPLATE_TAR}${RESET}..."
+  docker image save "$TEMPLATE_TAG" -o "$TEMPLATE_TAR"
+
+  echo "Importing template into sbx..."
+  sbx template load "$TEMPLATE_TAR"
+}
+
+# Stop + remove the running sandbox. Wired to EXIT/INT/TERM so the sandbox is
+# torn down whether the agent exits normally or the user hits Ctrl-C. Reads the
+# name from a *global* (SANDBOX_NAME), not a caller local: the EXIT trap fires
+# after run_sandbox has already returned, when any local would be out of scope.
+# The once-guard keeps INT-then-EXIT from removing (and logging) twice.
+SANDBOX_NAME=""
+SANDBOX_CLEANED=0
+cleanup_sandbox() {
+  [ "$SANDBOX_CLEANED" = "1" ] && return
+  SANDBOX_CLEANED=1
+  [ -n "$SANDBOX_NAME" ] || return
+  echo ""
+  echo "Removing sandbox ${CYAN}${SANDBOX_NAME}${RESET}..."
+  sbx rm --force "$SANDBOX_NAME" >/dev/null 2>&1 || true
+}
+
+# Start a fresh sandbox for this directory and tear it down on exit. A unique
+# name per invocation is what makes repeated runs in one directory spawn
+# independent sandboxes (a shared workspace path alone would reconnect).
+run_sandbox() {
+  require_tools sbx
+
+  # $$ (pid) + $RANDOM keeps names unique even for two runs in the same second.
+  SANDBOX_NAME="${SANDBOX_PREFIX}$(printf '%d-%04x' "$$" "$RANDOM")"
+  trap cleanup_sandbox EXIT INT TERM
+
+  # Default the claude agent to Sonnet 5, trust the pre-vetted dashboard hooks
+  # for Codex, and default the shell agent to zsh
+  # (matching `--attach` below). If the caller is already forwarding their own
+  # agent arguments (a `--` in the args), leave the arguments entirely to them.
+  # Everything after `--` is handed straight to the agent.
+  local agent_args=() has_dashdash=0 a
+  for a in "$@"; do
+    [ "$a" = "--" ] && has_dashdash=1 && break
+  done
+  if [ "${1:-}" = "claude" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(-- --model "$DEFAULT_CLAUDE_MODEL")
+  elif [ "${1:-}" = "codex" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(
+      --
+      --dangerously-bypass-hook-trust
+    )
+  elif [ "${1:-}" = "shell" ] && [ "$has_dashdash" -eq 0 ]; then
+    agent_args=(-- -c "exec zsh")
+  fi
+
+  # Select the kits belonging to this image variant.
+  local kit_args=() selected_kits=() k
+  if [ "$VARIANT" = "claude-code" ]; then
+    selected_kits=("${CLAUDE_CODE_KITS[@]}")
+  elif [ "$VARIANT" = "codex" ]; then
+    selected_kits=("${CODEX_KITS[@]}")
+  fi
+  for k in "${selected_kits[@]}"; do
+    kit_args+=(--kit "$REPO_DIR/docker-sandbox/kits/$k")
+  done
+
+  echo "Starting sandbox ${CYAN}${SANDBOX_NAME}${RESET} for ${CWD}..."
+  # Pass the workspace explicitly so it's mounted and recorded (that recorded
+  # path is what `-a` matches on). `|| true` keeps a non-zero agent exit from
+  # tripping `set -e` before the cleanup trap runs.
+  sbx run --name "$SANDBOX_NAME" --template "$TEMPLATE_TAG" "${kit_args[@]}" "$@" "$CWD" "${agent_args[@]}" || true
+}
+
+main() {
+  init_environment
+
+  if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
+    shift
+    attach_to_sandbox "$@"   # execs into the sandbox; never returns
+  fi
+
+  self_update "$@"           # may re-exec this script; pass original args through
+
+  # Everything after the (optional) agent name is forwarded to `sbx run`; with
+  # no args we launch the default agent.
+  if [ "$#" -eq 0 ]; then
+    set -- "$DEFAULT_AGENT"
+  fi
+
+  # The first arg is the agent; it selects which image variant to build and load.
+  resolve_variant "$1"
+  build_and_import_template
+  run_sandbox "$@"
+}
+
+main "$@"
