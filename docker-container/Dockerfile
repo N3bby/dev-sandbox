@@ -94,6 +94,17 @@ RUN asdf set -u nodejs 26.5.0
 # Install Java
 RUN asdf plugin add java
 RUN asdf install java temurin-25.0.3+9.0.LTS
+RUN asdf set -u java temurin-25.0.3+9.0.LTS
+
+# Install pnpm
+RUN asdf plugin add pnpm
+RUN asdf install pnpm 11.19.0
+RUN asdf set -u pnpm 11.19.0
+
+# Install gradle
+RUN asdf plugin add gradle https://github.com/rfrancis/asdf-gradle.git 
+RUN asdf install gradle 8.14.4
+RUN asdf set -u gradle 8.14.4
 
 # Install codex. Its runtime (the standalone binaries the ~/.local/bin/codex
 # symlink points into) normally lives under ~/.codex/packages, the same dir it
