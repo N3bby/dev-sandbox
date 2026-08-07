@@ -69,6 +69,10 @@ dev              # sbx sandbox
 dev-container    # docker run container
 ```
 
+`dev --no-asdf-install` skips the entrypoint's automatic `asdf install`
+for that launch. This is useful when the project's tool versions are already
+installed or when startup must not modify asdf.
+
 `dev` launches a plain shell by default. Pass an agent to launch it instead:
 
 ```bash

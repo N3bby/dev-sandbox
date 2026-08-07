@@ -177,6 +177,7 @@ run_container() {
     --env "HOST_UID=$(id -u)" \
     --env "HOST_GID=$(id -g)" \
     --env "IS_SANDBOX=1" \
+    --env "DEV_SKIP_ASDF_INSTALL=$SKIP_ASDF_INSTALL" \
     --env "CODEX_STATUS_SERVER_URL=http://100.127.103.89:4317" \
     --volume "$CWD:$WORKDIR" \
     --workdir "$WORKDIR" \
@@ -203,6 +204,16 @@ enable_agent_bypass() {
 
 main() {
   init_environment
+
+  # Skip the startup `asdf install` when the project already has its tool
+  # versions available, or when a launch must not touch asdf at all. Keep this
+  # as a launcher option rather than passing it through as the container
+  # command.
+  SKIP_ASDF_INSTALL=0
+  if [[ "${1:-}" == "--no-asdf-install" ]]; then
+    SKIP_ASDF_INSTALL=1
+    shift
+  fi
 
   if [[ "${1:-}" == "--attach" || "${1:-}" == "-a" ]]; then
     shift

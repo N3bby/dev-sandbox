@@ -102,8 +102,12 @@ main() {
   echo "==> grant_docker_access"
   grant_docker_access
 
-  echo "==> run_asdf_install"
-  run_asdf_install "$USERNAME"
+  if [ "${DEV_SKIP_ASDF_INSTALL:-0}" = "1" ]; then
+    echo "==> skipping run_asdf_install"
+  else
+    echo "==> run_asdf_install"
+    run_asdf_install "$USERNAME"
+  fi
 
   echo "==> exec"
   exec gosu "$USERNAME" "$@"
