@@ -30,14 +30,14 @@ take_ownership_of_home() {
   echo "==> chown /home/ubuntu directories"
   find /home/ubuntu -xdev -type d -print0 | xargs -0 --no-run-if-empty chown "$HOST_UID:$HOST_GID"
 
-  # asdf's shims are rewritten in place by `asdf reshim` (which plugins like
-  # nodejs run automatically after every install) to add each newly
-  # installed version. Unlike the rest of /home/ubuntu, those shim files —
-  # not just their directory — need to be writable by the runtime user, or
-  # reshim fails with a permission error and the install is discarded.
-  if [ -d "$ASDF_DATA_DIR" ]; then
-    echo "==> chown -R \$ASDF_DATA_DIR"
-    chown -R "$HOST_UID:$HOST_GID" "$ASDF_DATA_DIR"
+  # mise rewrites its shims in place (on every install, and on `mise reshim`)
+  # to add each newly installed version. Unlike the rest of /home/ubuntu, those
+  # shim files — not just their directory — need to be writable by the runtime
+  # user, or reshimming fails with a permission error and the install is
+  # discarded.
+  if [ -d "$MISE_DATA_DIR" ]; then
+    echo "==> chown -R \$MISE_DATA_DIR"
+    chown -R "$HOST_UID:$HOST_GID" "$MISE_DATA_DIR"
   fi
 }
 
@@ -46,14 +46,14 @@ grant_passwordless_sudo() {
   chmod 440 /etc/sudoers.d/devuser
 }
 
-# The mounted project's .tool-versions may pin a version this image never
-# installed. Install anything missing before running the command, so asdf
-# shims don't fail. Best-effort: offline or a missing plugin shouldn't block
-# startup — the shim will surface the real error if the version is still gone.
-# Runs as $1 since installed versions must be owned by whoever ends up using
-# them.
-run_asdf_install() {
-  gosu "$1" asdf install || true
+# The mounted project's mise config (mise.toml or .tool-versions) may pin a
+# version this image never installed. Install anything missing before running the
+# command, so mise's shims don't fail. Best-effort: offline or an unknown tool
+# shouldn't block startup — the shim will surface the real error if the version
+# is still gone. Runs as $1 since installed versions must be owned by whoever
+# ends up using them.
+run_mise_install() {
+  gosu "$1" mise install || true
 }
 
 # Let the user talk to the Docker daemon without sudo. The mounted
@@ -102,11 +102,11 @@ main() {
   echo "==> grant_docker_access"
   grant_docker_access
 
-  if [ "${DEV_SKIP_ASDF_INSTALL:-0}" = "1" ]; then
-    echo "==> skipping run_asdf_install"
+  if [ "${DEV_SKIP_MISE_INSTALL:-0}" = "1" ]; then
+    echo "==> skipping run_mise_install"
   else
-    echo "==> run_asdf_install"
-    run_asdf_install "$USERNAME"
+    echo "==> run_mise_install"
+    run_mise_install "$USERNAME"
   fi
 
   echo "==> exec"
