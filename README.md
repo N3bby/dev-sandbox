@@ -69,9 +69,9 @@ dev              # sbx sandbox
 dev-container    # docker run container
 ```
 
-`dev --no-asdf-install` skips the entrypoint's automatic `asdf install`
+`dev --no-mise-install` skips the entrypoint's automatic `mise install`
 for that launch. This is useful when the project's tool versions are already
-installed or when startup must not modify asdf.
+installed or when startup must not modify mise's state.
 
 `dev` launches a plain shell by default. Pass an agent to launch it instead:
 
@@ -97,6 +97,22 @@ dev-container --attach    # or: dev-container -a
 ```
 
 `--attach` skips the build and runs a new shell in the existing sandbox/container, matched by the mounted directory. If several are running for the same directory, it lists them and prompts you to choose. Any args after `--attach` run as a command instead of a shell (e.g. `dev --attach ls`).
+
+## Tool versions (`mise`)
+
+Both images manage runtimes with [mise-en-place](https://mise.jdx.dev), pinned to
+one release per image (bump the `MISE_VERSION` build arg to upgrade). Default
+versions are installed globally at build time; a project's own `mise.toml`,
+`.mise.toml` or `.tool-versions` takes over inside the workspace, and the
+docker-container entrypoint runs `mise install` on startup to fetch anything the
+image doesn't already have. Because mise ships a built-in tool registry there are
+no plugins to add first — any tool it knows (`mise registry`) resolves on demand.
+
+Both images also set `MISE_TRUSTED_CONFIG_PATHS` over the workspace: mise
+otherwise rejects a `mise.toml` that carries `[env]` or `[tasks]` as untrusted,
+which would make every mise command in the project fail. These are throwaway
+environments running the project you deliberately mounted, so the config is
+trusted up front.
 
 ## Known issues / possible improvements
 - Explicit agent-specific ssh keys (not mounting `id_rsa` and `id_rsa.pub` keypair of the host)

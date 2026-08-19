@@ -53,17 +53,28 @@ Shared files (`install.sh`, `uninstall.sh`, `README.md`, this file) stay at the 
 2. Builds the image tagged `dev-sandbox` from `docker-container/` (build context), passing `HOST_UID`/`HOST_GID` build args so `/home/ubuntu` ownership is baked in.
 3. Reads `docker-container/mounts`, expands `~`, skips missing sources (or creates them on the host when flagged `mkdir`/`touch`/`json`).
 4. Runs `docker run -it --rm` with the CWD mounted at `/workspace/<dirname>`, the container named `dev-<dirname>-<rand>`, `HOST_UID`/`HOST_GID`/`IS_SANDBOX` env vars, and any configured mounts. When the command is `claude`, injects `--dangerously-skip-permissions`.
-5. `docker-container/entrypoint.sh` creates a user/group matching `HOST_UID`/`HOST_GID`, chowns `/home/ubuntu` *directories* (not files) to that user, grants passwordless sudo, then `gosu`s into the user.
+5. `docker-container/entrypoint.sh` creates a user/group matching `HOST_UID`/`HOST_GID`, chowns `/home/ubuntu` *directories* (not files) to that user, grants passwordless sudo, runs `mise install` for the mounted project (skipped by `dev --no-mise-install`, which sets `DEV_SKIP_MISE_INSTALL=1`), then `gosu`s into the user.
 
 `dev-container -a` / `--attach` `docker exec`s a new `gosu` shell into a container already running for this directory, identified by its `$CWD` → `$WORKDIR` bind mount (the name prefix is only a prefilter). Prompts when several match. Extra args after `--attach` run as the command instead of a shell.
 
 ### Container user model
 
-All tools (Oh My Zsh, asdf, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home, then chowns its *directories* (not files) so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
+All tools (Oh My Zsh, mise, Claude Code) are installed to `/home/ubuntu` during the image build. The entrypoint creates a non-root user matching the host UID/GID with `/home/ubuntu` as their home, then chowns its *directories* (not files) so they can write into them. The project directory is mounted separately under `/workspace`, so it's untouched; any `mounts` entries that land under `/home/ubuntu` are skipped via `-xdev` since bind mounts are already owned by the host user.
 
 ## Adding tools to the images
 
-Add `RUN` steps to the relevant Dockerfile (`docker-container/Dockerfile` or `docker-sandbox/template/Dockerfile`). The next invocation of the corresponding command rebuilds. Tools that modify `PATH` at runtime (nvm, asdf plugins) should be initialized in `.zshrc`/`.bashrc`, not in `ENTRYPOINT`-level scripts.
+Add `RUN` steps to the relevant Dockerfile (`docker-container/Dockerfile` or `docker-sandbox/template/Dockerfile`). The next invocation of the corresponding command rebuilds. Tools that modify `PATH` at runtime (nvm and friends) should be initialized in `.zshrc`/`.bashrc`, not in `ENTRYPOINT`-level scripts.
+
+## Tool versions (mise-en-place)
+
+Both images manage runtimes with [mise](https://mise.jdx.dev):
+
+- The binary is a single pinned release asset (`MISE_VERSION` build arg): `/usr/local/bin/mise` for docker-container, `/home/agent/.local/bin/mise` for docker-sandbox.
+- Default versions are installed with one `RUN mise use -g <tool>@<version>` per tool — that installs the version *and* pins it in the global config (`~/.config/mise/config.toml`). There is no plugin-add step: mise resolves tools through its built-in registry (`mise registry`), so any tool it knows works on demand, including ones the image never pre-installed.
+- `$MISE_DATA_DIR` (`~/.local/share/mise`) holds installs and shims. The shims dir is on `PATH` via image `ENV` so non-interactive shells (the `bash -c` agents shell out through) see the tools; interactive zsh additionally runs `eval "$(mise activate zsh)"`, which exports the tool env (`JAVA_HOME` etc.) and re-resolves versions on `cd`.
+- `MISE_TRUSTED_CONFIG_PATHS` is set over the workspace (`/workspace` for docker-container, `/` for docker-sandbox, whose in-sandbox workspace path is chosen by `sbx`). Without it, a project `mise.toml` containing `[env]` or `[tasks]` is rejected as untrusted — mise errors out instead of prompting, which would break every mise command in the project.
+- Java versions are spelled `<vendor>-<version>` and resolve partial versions to the newest matching build, so `java@temurin-25.0.3` pins Temurin 25.0.3 without hardcoding its build suffix. mise prefers already-installed versions when resolving, so a partial pin doesn't need the network at runtime.
+- Python installs from a precompiled build when one exists for the pinned version and otherwise falls back to compiling from source — hence the build-dependency `apt-get` step in both images.
 
 ## The `mounts` file (docker-container only)
 

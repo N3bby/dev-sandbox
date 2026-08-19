@@ -27,11 +27,23 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y docker-ce-cli docker-compose-plugin
 
-# Install asdf (the binary goes in /usr/local/bin; plugins and tool versions are
-# installed later, as the ubuntu user, into $HOME/.asdf)
-RUN curl -L https://github.com/asdf-vm/asdf/releases/download/v0.19.0/asdf-v0.19.0-linux-amd64.tar.gz | tar -xz -C /usr/local/bin
-ENV ASDF_DATA_DIR=/home/ubuntu/.asdf
-ENV PATH="${ASDF_DATA_DIR}/shims:$PATH"
+# Install mise-en-place (a single static binary in /usr/local/bin; tool versions
+# are installed later, as the ubuntu user, into $MISE_DATA_DIR). The release
+# asset name embeds the version, so it has to be pinned rather than "latest";
+# bump MISE_VERSION to upgrade.
+ARG MISE_VERSION=v2026.8.8
+RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in amd64) arch=x64 ;; esac \
+    && curl -fsSL -o /usr/local/bin/mise \
+         "https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-${arch}" \
+    && chmod +x /usr/local/bin/mise
+ENV MISE_DATA_DIR=/home/ubuntu/.local/share/mise
+ENV PATH="${MISE_DATA_DIR}/shims:$PATH"
+# Trust any mise config the mounted project ships. mise refuses to load a
+# mise.toml carrying [env]/[tasks] from an untrusted path — it errors out rather
+# than prompting — which would break every mise command inside /workspace. The
+# workspace is the directory the user deliberately mounted, so trust it.
+ENV MISE_TRUSTED_CONFIG_PATHS=/workspace
 
 # Install Python build dependencies
 RUN apt-get install -y build-essential gdb lcov pkg-config \
@@ -56,7 +68,7 @@ RUN if [ "$HOST_GID" != "1000" ] && ! getent group "$HOST_GID" >/dev/null 2>&1; 
  && chown -R "$HOST_UID:$HOST_GID" /home/ubuntu
 
 # Everything below installs into $HOME, so run it as the ubuntu user to bake in
-# correct ownership at build time (no runtime chown of the asdf tree, etc.).
+# correct ownership at build time (no runtime chown of the mise tree, etc.).
 USER ubuntu
 
 # Install Oh My Zsh
@@ -75,36 +87,37 @@ ENV PATH="/home/ubuntu/.local/bin:$PATH"
 RUN curl -fsSL https://opencode.ai/install | bash
 ENV PATH="/home/ubuntu/.opencode/bin:$PATH"
 
-# Make asdf shims available in interactive shells
-RUN echo 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> /home/ubuntu/.zshrc
+# Activate mise in interactive shells. Activation (unlike the shims already on
+# PATH above) also exports the tool env — JAVA_HOME and friends — and switches
+# versions on every `cd`. The shims stay on PATH for non-interactive shells,
+# which never source .zshrc.
+RUN echo 'eval "$(mise activate zsh)"' >> /home/ubuntu/.zshrc
 
-# Install Terraform
-RUN asdf plugin add terraform https://github.com/asdf-community/asdf-hashicorp.git
+# Install the default tool versions. `mise use -g` installs the version and pins
+# it in the global config (~/.config/mise/config.toml) in one step, and every
+# tool below resolves through mise's built-in registry, so there are no plugins
+# to add first.
+#
+# Terraform needs no step of its own: no global version is pinned here (there
+# wasn't one before either), and a project pinning it resolves straight from the
+# registry when `mise install` runs at startup.
 
 # Install Python
-RUN asdf plugin add python
-RUN asdf install python 3.14.6
-RUN asdf set -u python 3.14.6
+RUN mise use -g python@3.14.6
 
 # Install Node.js
-RUN asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git
-RUN asdf install nodejs 26.5.0
-RUN asdf set -u nodejs 26.5.0
+RUN mise use -g node@26.5.0
 
-# Install Java
-RUN asdf plugin add java
-RUN asdf install java temurin-25.0.3+9.0.LTS
-RUN asdf set -u java temurin-25.0.3+9.0.LTS
+# Install Java. mise spells JDKs `<vendor>-<version>` and resolves a partial
+# version to the newest matching build, so this pins Temurin 25.0.3 without
+# hardcoding its build suffix (`temurin-25.0.3+9.0.LTS` today).
+RUN mise use -g java@temurin-25.0.3
 
 # Install pnpm
-RUN asdf plugin add pnpm
-RUN asdf install pnpm 11.19.0
-RUN asdf set -u pnpm 11.19.0
+RUN mise use -g pnpm@11.19.0
 
 # Install gradle
-RUN asdf plugin add gradle https://github.com/rfrancis/asdf-gradle.git 
-RUN asdf install gradle 8.14.4
-RUN asdf set -u gradle 8.14.4
+RUN mise use -g gradle@8.14.4
 
 # Install codex. Its runtime (the standalone binaries the ~/.local/bin/codex
 # symlink points into) normally lives under ~/.codex/packages, the same dir it
