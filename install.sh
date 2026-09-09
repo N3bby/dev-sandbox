@@ -12,7 +12,7 @@ MOUNTS_FILE="${INSTALL_DIR}/docker-container/mounts"
 
 make_dev_executable() {
   echo "  ${BOLD}[1/2]${RESET} Making dev commands executable..."
-  chmod +x "${INSTALL_DIR}/bin/dev" "${INSTALL_DIR}/bin/dev-container"
+  chmod +x "${INSTALL_DIR}/bin/dev" "${INSTALL_DIR}/bin/dev-sbx"
   echo "        ${GREEN}✅ Done${RESET}"
   echo ""
 }
