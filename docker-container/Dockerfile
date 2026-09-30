@@ -83,9 +83,9 @@ RUN echo "CAP_LEFT=\$'\\ue0b6'" >> /home/ubuntu/.zshrc \
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/home/ubuntu/.local/bin:$PATH"
 
-# Install Opencode
-RUN curl -fsSL https://opencode.ai/install | bash
-ENV PATH="/home/ubuntu/.opencode/bin:$PATH"
+# Install Opencode, disabled because I don't use it atm.
+# RUN curl -fsSL https://opencode.ai/install | bash
+# ENV PATH="/home/ubuntu/.opencode/bin:$PATH"
 
 # Activate mise in interactive shells. Activation (unlike the shims already on
 # PATH above) also exports the tool env — JAVA_HOME and friends — and switches
